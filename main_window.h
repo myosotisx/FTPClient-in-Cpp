@@ -37,6 +37,7 @@ private:
     Ui::MainWindow *ui;
     Client::State state;
     Client* client;
+    FileModel* remoteFileModel;
     QThread* controlThread;
     char ipAddr[32];
     int port;

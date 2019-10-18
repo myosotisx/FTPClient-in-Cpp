@@ -21,8 +21,9 @@ MainWindow::MainWindow(QWidget *parent)
     ui->localFileTree->setModel(localFileModel);
     ui->localFileTree->setRootIndex(localFileModel->setRootPath("/Users/myosotis"));
 
-    FileModel* fileModel = new FileModel;
-    ui->remoteFileTree->setModel(fileModel);
+    remoteFileModel = new FileModel(ui->remoteFileTree);
+    ui->remoteFileTree->setModel(remoteFileModel);
+    ui->remoteFileTree->setDragDropMode(QAbstractItemView::DragDrop);
 
 
     connect(client, &Client::setState, this, &MainWindow::setState, Qt::QueuedConnection);
@@ -37,6 +38,7 @@ MainWindow::MainWindow(QWidget *parent)
     connect(ui->connBtn, &QPushButton::clicked, this, &MainWindow::connectNLogin);
     connect(ui->disconnBtn, &QPushButton::clicked, this, &MainWindow::disconnNLogout);
     connect(ui->refreshBtn, &QPushButton::clicked, this, &MainWindow::refreshFileList);
+    QThread* controlThread = new QThread;
     client->moveToThread(controlThread);
     controlThread->start();
 }
@@ -96,15 +98,15 @@ void MainWindow::connectNLogin() {
         strcpy(username, ui->userLineEdit->text().toLatin1().data());
     }
     else {
-        strcpy(username, "anonymous");
-        ui->userLineEdit->setText("anonymous");
+        strcpy(username, "myosotisx");
+        ui->userLineEdit->setText("myosotisx");
     }
     if (!ui->pswLineEdit->text().isEmpty()) {
         strcpy(password, ui->pswLineEdit->text().toLatin1().data());
     }
-    else if (!strcmp(username, "anonymous")) {
-        strcpy(password, "");
-        ui->pswLineEdit->setText("");
+    else if (!strcmp(username, "myosotisx")) {
+        strcpy(password, "9");
+        ui->pswLineEdit->setText("9");
     }
     else {
         msgbox.setText(tr("请输入密码！"));
@@ -135,7 +137,7 @@ void MainWindow::refreshFileList() {
 void MainWindow::displayFileList(const char* fileList) {
     FileNode node("wdnmd");
     QString fileListStr(fileList);
-    node.parseFileListStr(fileListStr);
+    remoteFileModel->getRoot()->appendChildren(FileNode::parseFileListStr(fileListStr));
 }
 
 void MainWindow::sendUserInfo() {
