@@ -8,7 +8,7 @@ class FileNode: public QObject, public QStandardItem {
 
 public:
     FileNode(const QString& fileName);
-    QList<QStringList>& parseFileListStr(const QString& fileListStr);
+    QVector<QStringList>& parseFileListStr(const QString& fileListStr);
     void addChildren(const QList<QStringList>& fileList);
 };
 

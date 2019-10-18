@@ -10,7 +10,7 @@
 MainWindow::MainWindow(QWidget *parent)
     : QMainWindow(parent)
     , ui(new Ui::MainWindow)
-    , state(Client::NORMQUIT)
+    , state(Client::IDLE)
     , client(new Client)
     , controlThread(new QThread)
     , port(21) {
@@ -26,6 +26,7 @@ MainWindow::MainWindow(QWidget *parent)
 
 
     connect(client, &Client::setState, this, &MainWindow::setState, Qt::QueuedConnection);
+    connect(client, &Client::reqUserInfo, this, &MainWindow::sendUserInfo, Qt::QueuedConnection);
     connect(client, &Client::showMsg, this, &MainWindow::displayMsg, Qt::QueuedConnection);
     connect(client, &Client::showFileList, this, &MainWindow::displayFileList, Qt::QueuedConnection);
 
@@ -45,16 +46,7 @@ MainWindow::~MainWindow() {
 }
 
 void MainWindow::setState(int state) {
-    if (state == Client::WAITUSER) {
-        emit login(username ,password);
-    }
-
     this->state = Client::State(state);
-
-    if (this->state == Client::NORMQUIT || this->state == Client::ERRORQUIT) {
-        ui->connBtn->setEnabled(true);
-    }
-    else ui->connBtn->setEnabled(false);
     qDebug() << "Debug Info: state is set to " << this->state;
 }
 
@@ -73,7 +65,19 @@ void MainWindow::connectNLogin() {
     memset(username, 0, 32);
     memset(password, 0, 32);
     QMessageBox msgbox(QMessageBox::Information, tr("提示"), tr(""));
+
     msgbox.setButtonText(QMessageBox::Ok, tr("确 定"));
+    if (state == Client::BUSY) {
+        msgbox.setText(tr("等待响应..."));
+        msgbox.exec();
+        return;
+    }
+    if (state != Client::IDLE && state != Client::WAITUSER) {
+        msgbox.setText(tr("您已连接！"));
+        msgbox.exec();
+        return;
+    }
+
     if (!ui->hostLineEdit->text().isEmpty()) {
         strcpy(ipAddr, ui->hostLineEdit->text().toLatin1().data());
     }
@@ -108,12 +112,17 @@ void MainWindow::connectNLogin() {
         return;
     }
 
-    emit setupControlConn(ipAddr, port);
+    if (state == Client::WAITUSER) {
+        emit login(username, password);
+    }
+    else {
+        emit setupControlConn(ipAddr, port);
+    }
 
 }
 
 void MainWindow::disconnNLogout() {
-    if (this->state == Client::ERRORQUIT || this->state == Client::NORMQUIT) return;
+    if (this->state == Client::IDLE) return;
     else {
         emit logout();
     }
@@ -124,5 +133,11 @@ void MainWindow::refreshFileList() {
 }
 
 void MainWindow::displayFileList(const char* fileList) {
-    qDebug() << fileList;
+    FileNode node("wdnmd");
+    QString fileListStr(fileList);
+    node.parseFileListStr(fileListStr);
+}
+
+void MainWindow::sendUserInfo() {
+    emit login(username, password);
 }

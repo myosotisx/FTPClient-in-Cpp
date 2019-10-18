@@ -31,6 +31,7 @@ public slots:
     void refreshFileList();
     void displayMsg(const char* msg);
     void displayFileList(const char* fileList);
+    void sendUserInfo();
 
 private:
     Ui::MainWindow *ui;

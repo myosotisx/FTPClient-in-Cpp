@@ -171,4 +171,37 @@ int searchIpAddrNPort(const char* str, char* ipAddr, int* port) {
     }
 }
 
+const char* searchFinalLine(const char* response) {
+    int len = strlen(response);
+    if (!(response[len-1] == '\n' && response[len-2] == '\r')) {
+        return nullptr;
+    }
+    int p = len-3;
+    while (p >= 0) {
+        if (p && response[p] == '\n' && response[p-1] == '\r') break;
+        else p--;
+    }
+    if (isdigit(response[p+1]) && isdigit(response[p+2])
+    && isdigit(response[p+3]) && response[p+4] == ' ') {
+        return response+p+1;
+    }
+    else {
+        // 返回错误
+        return nullptr;
+    }
+}
+
+
+int getResCodeNParam(const char* response, int* stateCode, char* param) {
+    const char* finalLine = searchFinalLine(response);
+    if (!finalLine) return -1;
+    char _stateCode[8];
+    memset(_stateCode, 0, 8);
+    memset(param, 0, MAXPARAM);
+    strncpy(_stateCode, finalLine, 3);
+    strcpy(param, finalLine+4);
+    *stateCode = atoi(_stateCode);
+    return 1;
+}
+
 
