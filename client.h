@@ -6,6 +6,7 @@
 
 #include <QObject>
 
+#define BUFCNT 10
 
 class Client: public QObject {
     Q_OBJECT
@@ -23,15 +24,28 @@ public:
 signals:
     void setState(int);
     void showMsg(const char* msg);
+    void showFileList(const char* fileList);
 
 public slots:
     void setupControlConn(const char* ipAddr, int port);
     void login(const char* username, const char* password);
     void logout();
+    void refresh();
 
 private:
     int controlConnfd;
-    char recvBuf[MAXBUF];
+    int dataConnfd;
+    int mode; // 0 PORT, 1 PASV
+    int bufp;
+    char buf[BUFCNT][MAXBUF];
+    char fileList[MAXBUF];
+
+    char* nextBuf() {
+        char* recvBuf = buf[bufp];
+        bufp = (bufp+1)%BUFCNT;
+        return recvBuf;
+    }
+
 };
 
 #endif // CLIENT_H

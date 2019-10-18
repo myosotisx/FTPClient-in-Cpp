@@ -1,6 +1,8 @@
 #include "main_window.h"
 #include "ui_main_window.h"
 
+#include "client_pi.h"
+
 #include <QDebug>
 #include <QFileSystemModel>
 #include <QMessageBox>
@@ -19,15 +21,21 @@ MainWindow::MainWindow(QWidget *parent)
     ui->localFileTree->setModel(localFileModel);
     ui->localFileTree->setRootIndex(localFileModel->setRootPath("/Users/myosotis"));
 
+    FileModel* fileModel = new FileModel;
+    ui->remoteFileTree->setModel(fileModel);
+
+
     connect(client, &Client::setState, this, &MainWindow::setState, Qt::QueuedConnection);
     connect(client, &Client::showMsg, this, &MainWindow::displayMsg, Qt::QueuedConnection);
+    connect(client, &Client::showFileList, this, &MainWindow::displayFileList, Qt::QueuedConnection);
 
     connect(this, &MainWindow::setupControlConn, client, &Client::setupControlConn, Qt::QueuedConnection);
     connect(this, &MainWindow::login, client, &Client::login, Qt::QueuedConnection);
     connect(this, &MainWindow::logout, client, &Client::logout, Qt::QueuedConnection);
-
+    connect(this, &MainWindow::refresh, client, &Client::refresh, Qt::QueuedConnection);
     connect(ui->connBtn, &QPushButton::clicked, this, &MainWindow::connectNLogin);
     connect(ui->disconnBtn, &QPushButton::clicked, this, &MainWindow::disconnNLogout);
+    connect(ui->refreshBtn, &QPushButton::clicked, this, &MainWindow::refreshFileList);
     client->moveToThread(controlThread);
     controlThread->start();
 }
@@ -51,7 +59,13 @@ void MainWindow::setState(int state) {
 }
 
 void MainWindow::displayMsg(const char* msg) {
-
+    int type = checkState(msg);
+    QString msgInHTML;
+    if (type == 1) msgInHTML = "<pre><font color=\"#00FF00\">" + QString(msg) + "</font></pre>";
+    else if (type == 2) msgInHTML = "<pre><font color=\"#FFBF00\">" + QString(msg) + "</font></pre>";
+    else if (type == 0) msgInHTML = "<pre><font color=\"#FF0000\">" + QString(msg) + "</font></pre>";
+    else msgInHTML = "<pre><font color=\"#000000\">" + QString(msg) + "</font></pre>";
+    ui->infoBroser->append(msgInHTML);
 }
 
 void MainWindow::connectNLogin() {
@@ -100,5 +114,15 @@ void MainWindow::connectNLogin() {
 
 void MainWindow::disconnNLogout() {
     if (this->state == Client::ERRORQUIT || this->state == Client::NORMQUIT) return;
-    else emit logout();
+    else {
+        emit logout();
+    }
+}
+
+void MainWindow::refreshFileList() {
+    emit refresh();
+}
+
+void MainWindow::displayFileList(const char* fileList) {
+    qDebug() << fileList;
 }

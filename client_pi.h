@@ -1,12 +1,14 @@
 #ifndef CLIENT_PI_H
 #define CLIENT_PI_H
 
+#include "client_util.h"
+
+int recvFileList(int dataConnfd, char* fileList);
+
 int checkState(const char* response);
 
-int requestUSER(int fd, const char* param);
+int request(int fd, const char* cmd, const char* param);
 
-int requestPASS(int fd, const char* param);
-
-int requestQUIT(int fd);
+const char* findFinalLine(const char* response);
 
 #endif // CLIENT_PI_H

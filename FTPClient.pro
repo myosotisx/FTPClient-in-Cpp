@@ -19,6 +19,7 @@ SOURCES += \
     client.cpp \
     client_pi.cpp \
     client_util.cpp \
+    file_model.cpp \
     main.cpp \
     main_window.cpp
 
@@ -26,6 +27,7 @@ HEADERS += \
     client.h \
     client_pi.h \
     client_util.h \
+    file_model.h \
     main_window.h
 
 FORMS += \

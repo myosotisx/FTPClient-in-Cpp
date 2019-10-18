@@ -2,6 +2,7 @@
 #define MAINWINDOW_H
 
 #include "client.h"
+#include "file_model.h"
 
 #include <QMainWindow>
 #include <QThread>
@@ -21,12 +22,15 @@ signals:
     void setupControlConn(const char* ipAddr, int port);
     void login(const char* username, const char* password);
     void logout();
+    void refresh();
 
 public slots:
     void setState(int state);
     void connectNLogin();
     void disconnNLogout();
+    void refreshFileList();
     void displayMsg(const char* msg);
+    void displayFileList(const char* fileList);
 
 private:
     Ui::MainWindow *ui;
