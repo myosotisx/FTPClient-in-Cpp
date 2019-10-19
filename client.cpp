@@ -17,7 +17,6 @@ void* receiver(void* _client) {
             return nullptr;
         }
         else if (recvLen != 0) {
-            pthread_testcancel();
             recvBuf[recvLen] = 0;
             emit client->showMsg(recvBuf);
             int resCode;
@@ -27,6 +26,7 @@ void* receiver(void* _client) {
             }
             recvBuf = client->nextBuf();
         }
+        pthread_testcancel();
     }
 }
 
@@ -59,13 +59,19 @@ void setResCode(Client* client, int resCode) {
     client->resCode = resCode;
 }
 
+void setRootPath(Client* client, const char* rootPath) {
+    memset(client->rootPath, 0, MAXPATH);
+    strcpy(client->rootPath, rootPath);
+}
+
 Client::Client(QObject* parent):
     QObject(parent)
     , state(IDLE)
     , resCode(-1)
     , controlConnfd(-1)
     , dataConnfd(-1)
-    , mode(1)
+    , dataListenfd(-1)
+    , mode(0)
     , bufp(0) {
 }
 
@@ -76,14 +82,37 @@ char* Client::nextBuf() {
 }
 
 int Client::waitResCode(int resCode, double timeout) {
-    timeval starttime,endtime;
+    timeval starttime, endtime;
     gettimeofday(&starttime, nullptr);
     while (1) {
-        if (this->resCode == resCode) return 1;
         gettimeofday(&endtime, nullptr);
         double timeuse = 1000000*(endtime.tv_sec-starttime.tv_sec)
                          +endtime.tv_usec-starttime.tv_usec;
         if (timeuse/1000 > 1000*timeout) return 0;
+        if (timeuse/1000 < 100) continue;
+        if (this->resCode == resCode) return 1;
+
+    }
+}
+
+int Client::waitConn(int listenfd, double timeout) {
+    timeval starttime, endtime, tv;
+    tv.tv_sec = 0;
+    tv.tv_usec = 0;
+    gettimeofday(&starttime, nullptr);
+    fd_set fds;
+    while (1) {
+        FD_ZERO(&fds);
+        FD_SET(listenfd, &fds);
+        int ret = select(listenfd+1, &fds, nullptr, nullptr, &tv);
+        if (ret > 0 && FD_ISSET(listenfd, &fds)) {
+            int newfd = acceptNewConn(listenfd);
+            return newfd;
+        }
+        gettimeofday(&endtime, nullptr);
+        double timeuse = 1000000*(endtime.tv_sec-starttime.tv_sec)
+                         +endtime.tv_usec-starttime.tv_usec;
+        if (timeuse/1000 > 1000*timeout) return -1;
     }
 }
 
@@ -95,15 +124,16 @@ void Client::setupControlConn(const char* ipAddr, int port) {
 
         if (waitResCode(220, 2)) {
             nState = WAITUSER;
+            if (state != IDLE) setClientState(this, nState);
             emit reqUserInfo();
+            return;
         }
         else {
-            qDebug() << "服务器响应超时！";
+            emit showMsg("Client: Connection timeout!", 0);
         }
-
     }
     else {
-        qDebug() << "连接服务器失败!";
+        emit showMsg("Client: Fail to setup connection with FTP server!\r\nPlease check your host and port.", 0);
     }
     setClientState(this, nState);
 }
@@ -113,17 +143,27 @@ void Client::login(const char* username, const char* password) {
     setClientState(this, BUSY);
     State nState = WAITUSER;
     request(this, "USER", username);
-    if (waitResCode(331, 2)) {
+    if (waitResCode(331, 5)) {
         request(this, "PASS", password);
     }
-    if (waitResCode(230, 10)) nState = NORM;
+    if (waitResCode(230, 10)
+        && request(this, "PWD", nullptr)
+        && waitResCode(257, 5)) {
+        nState = NORM;
+        emit setRemoteRoot(rootPath);
+    }
     if (state != IDLE) setClientState(this, nState);
+    if (state == NORM) emit showMsg("Client: login success.", 1);
+    else emit showMsg("Client: login fail.", 0);
 }
 
 void Client::logout() {
     setClientState(this, BUSY);
     request(this, "QUIT", nullptr);
-    waitResCode(221, 2);
+    if (waitResCode(221, 5)) {
+        emit showMsg("Client: normally disconnect.", 1);
+    }
+    else emit showMsg("Client: Error occurs when quit.", 2);
     setClientState(this, IDLE);
 }
 
@@ -138,49 +178,161 @@ void Client::refreshRemote(const char* path) {
 
     setClientState(this, BUSY);
     State nState = NORM;
-    if (request(this, "PASV", nullptr) != -1
-        && waitResCode(227, 5)
-        && (dataConnfd = setupConn(ipAddr, port, 1)) != -1
-        && request(this, "LIST", path) != -1
-        && waitResCode(150, 5)
-        && recvFileList(dataConnfd, remoteFileList) != -1
-        && waitResCode(226, 5)) {
-        close(dataConnfd);
-        dataConnfd = -1;
+    if (mode) {
+        if (request(this, "PASV", nullptr) != -1
+            && waitResCode(227, 5)
+            && (dataConnfd = setupConn(ipAddr, port, 1)) != -1
+            && request(this, "LIST", path) != -1
+            && waitResCode(150, 5)
+            && recvFileList(dataConnfd, remoteFileList) != -1
+            && waitResCode(226, 5)) {
+            close(dataConnfd);
+            dataConnfd = -1;
 
-        emit showRemote(path, remoteFileList);
+            emit showRemote(path, remoteFileList);
+            emit showMsg("Client: Refresh remote file list success.", 1);
+        }
+        else emit showMsg("Client: Fail to refresh remote file list.", 0);
     }
-    else qDebug() << "接收文件列表失败！";
+    else {
+        memset(ipAddr, 0, 32);
+        strcpy(ipAddr, "127.0.0.1");
+        char param[MAXPARAM];
+        if ((dataListenfd = setupListen(ipAddr, &port, 1)) != -1
+            && request(this, "PORT", generatePortParam(param, ipAddr, port)) != -1
+            && waitResCode(200, 5)
+            && request(this, "LIST", path) != -1
+            && waitResCode(150, 5)
+            && (dataConnfd = waitConn(dataListenfd, 5)) != -1
+            && recvFileList(dataConnfd, remoteFileList) != -1
+            && waitResCode(226, 5)) {
+
+            emit showRemote(path, remoteFileList);
+            emit showMsg("Client: Refresh remote file list success.", 1);
+        }
+        else emit showMsg("Client: Fail to refresh remote file list.", 0);
+    }
+    close(dataConnfd);
+    close(dataListenfd);
+    dataConnfd = -1;
+    dataListenfd = -1;
+
     if (state != IDLE) setClientState(this, nState);
 }
 
 void Client::putFile(const char* src, const char* dst) {
-    qDebug() << "src:" << src << "dst:" << dst;
     if (state != NORM) return;
 
     setClientState(this, BUSY);
     State nState = NORM;
     FILE* file = fopen(src, "rb");
     if (!file) {
-        qDebug() << "Fail to open file!";
+        emit showMsg("Client: Fail to open local file.", 0);
         if (state != IDLE) setClientState(this, nState);
         return;
     }
-    if (request(this, "TYPE", "I") != -1
-        && waitResCode(200, 5)
-        && request(this, "PASV", nullptr) != -1
-        && waitResCode(227, 5)
-        && (dataConnfd = setupConn(ipAddr, port, 1)) != -1
-        && request(this, "STOR", dst) != -1
-        && waitResCode(150, 5)
-        && sendFile(dataConnfd, file) != -1) {
-        close(dataConnfd);
-        if (waitResCode(226, 5)) qDebug() << "传输文件成功";
+    if (mode) {
+        if (request(this, "TYPE", "I") != -1
+            && waitResCode(200, 5)
+            && request(this, "PASV", nullptr) != -1
+            && waitResCode(227, 5)
+            && (dataConnfd = setupConn(ipAddr, port, 1)) != -1
+            && request(this, "STOR", dst) != -1
+            && waitResCode(150, 5)
+            && sendFile(dataConnfd, file) != -1) {
+            close(dataConnfd);
+            dataConnfd = -1;
+            if (waitResCode(226, 5)) emit showMsg("Client: Upload file success.", 1);
+            else emit showMsg("Client: Upload finished without response from server.", 2);
+        }
         else {
-            qDebug() << "传输文件完成，服务器未响应";
+            close(dataConnfd);
+            dataConnfd = -1;
+            emit showMsg("Client: Fail to upload file.", 0);
         }
     }
-    else qDebug() << "传输文件失败";
+    else {
+        memset(ipAddr, 0, 32);
+        strcpy(ipAddr, "127.0.0.1");
+        char param[MAXPARAM];
+        if (request(this, "TYPE", "I") != -1
+            && waitResCode(200, 5)
+            && (dataListenfd = setupListen(ipAddr, &port, 1)) != -1
+            && request(this, "PORT", generatePortParam(param, ipAddr, port)) != -1
+            && waitResCode(200, 5)
+            && request(this, "STOR", dst) != -1
+            && waitResCode(150, 5)
+            && (dataConnfd = waitConn(dataListenfd, 5)) != -1
+            && sendFile(dataConnfd, file) != -1) {
+            close(dataConnfd);
+            close(dataListenfd);
+            dataConnfd = -1;
+            dataListenfd = -1;
+
+            if (waitResCode(226, 5)) emit showMsg("Client: Upload file success.", 1);
+            else emit showMsg("Client: Upload finished without response from server.", 2);
+        }
+        else {
+            close(dataConnfd);
+            close(dataListenfd);
+            dataConnfd = -1;
+            dataListenfd = -1;
+            emit showMsg("Client: Fail to upload file.", 0);
+        }
+    }
+    fclose(file);
+    if (state != IDLE) setClientState(this, nState);
+}
+
+void Client::getFile(const char* src, const char* dst) {
+    if (state != NORM) return;
+
+    setClientState(this, BUSY);
+    State nState = NORM;
+    FILE* file = fopen(dst, "wb");
+    if (!file) {
+        emit showMsg("Client: Fail to open local file.", 0);
+        if (state != IDLE) setClientState(this, nState);
+        return;
+    }
+    if (mode) {
+        if (request(this, "TYPE", "I") != -1
+            && waitResCode(200, 5)
+            && request(this, "PASV", nullptr) != -1
+            && waitResCode(227, 5)
+            && (dataConnfd = setupConn(ipAddr, port, 1)) != -1
+            && request(this, "RETR", src) != -1
+            && waitResCode(150, 5)
+            && recvFile(dataConnfd, file) != -1) {
+
+            if (waitResCode(226, 5)) emit showMsg("Client: Download file success.", 1);
+            else emit showMsg("Client: Download finished without response from server.", 2);
+        }
+        else emit showMsg("Client: Fail to upload file.", 0);
+    }
+    else {
+        memset(ipAddr, 0, 32);
+        strcpy(ipAddr, "127.0.0.1");
+        char param[MAXPARAM];
+        if (request(this, "TYPE", "I") != -1
+            && waitResCode(200, 5)
+            && (dataListenfd = setupListen(ipAddr, &port, 1)) != -1
+            && request(this, "PORT", generatePortParam(param, ipAddr, port)) != -1
+            && waitResCode(200, 5)
+            && request(this, "RETR", src) != -1
+            && waitResCode(150, 5)
+            && (dataConnfd = waitConn(dataListenfd, 5)) != -1
+            && recvFile(dataConnfd, file) != -1) {
+
+            if (waitResCode(226, 5)) emit showMsg("Client: Download file success.", 1);
+            else emit showMsg("Client: Download finished without response from server.", 2);
+        }
+        else emit showMsg("Client: Fail to upload file.", 0);
+    }
+    close(dataConnfd);
+    close(dataListenfd);
+    dataConnfd = -1;
+    dataListenfd = -1;
     fclose(file);
     if (state != IDLE) setClientState(this, nState);
 }

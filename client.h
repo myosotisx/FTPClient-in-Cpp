@@ -27,11 +27,13 @@ public:
     friend int getControlConnfd(Client* client);
     friend void setDataConnAddr(Client* client, const char* ipAddr, int port);
     friend void setResCode(Client* client, int resCode);
+    friend void setRootPath(Client* client, const char* rootPath);
 
 signals:
     void setState(int);
     void reqUserInfo();
-    void showMsg(const char* msg);
+    void setRemoteRoot(const char* rootPath);
+    void showMsg(const char* msg, int type = -1);
     void showLocal(const char* path, const char* localFileList);
     void showRemote(const char* path, const char* remoteFileList);
 
@@ -42,16 +44,19 @@ public slots:
     void refreshLocal(const char* path);
     void refreshRemote(const char* path);
     void putFile(const char* src, const char* dst);
+    void getFile(const char* src, const char* dst);
 
 private:
     State state;
     int resCode;
     int controlConnfd;
     int dataConnfd;
+    int dataListenfd;
     int mode; // 0 PORT, 1 PASV
     int bufp;
     char ipAddr[32];
     int port;
+    char rootPath[MAXPATH];
     char buf[BUFCNT][MAXBUF];
     char localFileList[MAXBUF];
     char remoteFileList[MAXBUF];
@@ -60,6 +65,7 @@ private:
 
     char* nextBuf();
     int waitResCode(int stateCode, double timeout);
+    int waitConn(int listenfd, double timeout);
 
 };
 

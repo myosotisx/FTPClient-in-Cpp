@@ -22,23 +22,26 @@ signals:
     void setupControlConn(const char* ipAddr, int port);
     void login(const char* username, const char* password);
     void logout();
-    void refreshLocal(const char* path);
+    // void refreshLocal(const char* path);
     void refreshRemote(const char* path);
     void putFile(const char* src, const char* dst);
+    void getFile(const char* src, const char* dst);
 
 public slots:
     void setState(int state);
+    void initRemoteRoot(const char* rootPath);
+    void showMsgbox(const QString& text);
     void connectNLogin();
     void disconnNLogout();
-    // void refreshFileList(const QModelIndex& index);
-    // void refreshRemoteRoot();
     void refreshLocalDir(const QModelIndex& index);
     void refreshRemoteDir(const QModelIndex& index);
-    void displayMsg(const char* msg);
+    void displayMsg(const char* msg, int type = -1);
     void displayLocal(const char* path, const char* localFileList);
     void displayRemote(const char* path, const char* remoteFileList);
     void uploadFile(const QString& srcPath, const QString& srcFile,
                     const QString& dstPath);
+    void downloadFile(const QString& srcPath, const QString& srcFile,
+                      const QString& dstPath);
     void sendUserInfo();
 
 private:
@@ -56,5 +59,6 @@ private:
     char remotePath[MAXPATH];
     char src[MAXPATH];
     char dst[MAXPATH];
+    char localFileList[MAXBUF];
 };
 #endif // MAINWINDOW_H

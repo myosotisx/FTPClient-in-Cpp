@@ -16,18 +16,21 @@ MainWindow::MainWindow(QWidget *parent)
     , port(21) {
     ui->setupUi(this);
 
-    // QFileSystemModel* localFileModel = new QFileSystemModel(this);
-    localFileModel = new FileModel(ui->localFileTree, "/Users/myosotis");
+    localFileModel = new FileModel(ui->localFileTree, "/Users/myosotis/Desktop");
     ui->localFileTree->setModel(localFileModel);
     ui->localFileTree->setDragDropMode(QAbstractItemView::DragDrop);
+    ui->localFileTree->header()->setMinimumSectionSize(200);
+    ui->localFileTree->header()->setSectionResizeMode(0, QHeaderView::ResizeToContents);
 
     remoteFileModel = new FileModel(ui->remoteFileTree, "/");
     ui->remoteFileTree->setModel(remoteFileModel);
     ui->remoteFileTree->setDragDropMode(QAbstractItemView::DragDrop);
-
+    ui->remoteFileTree->header()->setMinimumSectionSize(200);
+    ui->remoteFileTree->header()->setSectionResizeMode(0, QHeaderView::ResizeToContents);
 
     connect(client, &Client::setState, this, &MainWindow::setState, Qt::QueuedConnection);
     connect(client, &Client::reqUserInfo, this, &MainWindow::sendUserInfo, Qt::QueuedConnection);
+    connect(client, &Client::setRemoteRoot, this, &MainWindow::initRemoteRoot, Qt::QueuedConnection);
     connect(client, &Client::showMsg, this, &MainWindow::displayMsg, Qt::QueuedConnection);
     connect(client, &Client::showLocal, this, &MainWindow::displayLocal, Qt::QueuedConnection);
     connect(client, &Client::showRemote, this, &MainWindow::displayRemote, Qt::QueuedConnection);
@@ -35,9 +38,10 @@ MainWindow::MainWindow(QWidget *parent)
     connect(this, &MainWindow::setupControlConn, client, &Client::setupControlConn, Qt::QueuedConnection);
     connect(this, &MainWindow::login, client, &Client::login, Qt::QueuedConnection);
     connect(this, &MainWindow::logout, client, &Client::logout, Qt::QueuedConnection);
-    connect(this, &MainWindow::refreshLocal, client, &Client::refreshLocal, Qt::QueuedConnection);
+    // connect(this, &MainWindow::refreshLocal, client, &Client::refreshLocal, Qt::QueuedConnection);
     connect(this, &MainWindow::refreshRemote, client, &Client::refreshRemote, Qt::QueuedConnection);
     connect(this, &MainWindow::putFile, client, &Client::putFile, Qt::QueuedConnection);
+    connect(this, &MainWindow::getFile, client, &Client::getFile, Qt::QueuedConnection);
 
     connect(ui->connBtn, &QPushButton::clicked, this, &MainWindow::connectNLogin);
     connect(ui->disconnBtn, &QPushButton::clicked, this, &MainWindow::disconnNLogout);
@@ -45,6 +49,8 @@ MainWindow::MainWindow(QWidget *parent)
     connect(ui->remoteFileTree, &QTreeView::expanded, this, &MainWindow::refreshRemoteDir);
 
     connect(remoteFileModel, &FileModel::transfer, this, &MainWindow::uploadFile);
+    connect(localFileModel, &FileModel::transfer, this, &MainWindow::downloadFile);
+
     QThread* controlThread = new QThread;
     client->moveToThread(controlThread);
     controlThread->start();
@@ -59,12 +65,23 @@ void MainWindow::setState(int state) {
     qDebug() << "Debug Info: state is set to " << this->state;
 }
 
-void MainWindow::displayMsg(const char* msg) {
-    int type = checkState(msg);
+void MainWindow::initRemoteRoot(const char* rootPath) {
+    QString _rootPath(rootPath);
+    remoteFileModel->initRoot(rootPath);
+}
+
+void MainWindow::showMsgbox(const QString& text) {
+    QMessageBox msgbox(QMessageBox::Information, "Info", "");
+    msgbox.setText(text);
+    msgbox.exec();
+}
+
+void MainWindow::displayMsg(const char* msg, int type) {
+    if (type == -1) type = checkState(msg);
     QString msgInHTML;
-    if (type == 1) msgInHTML = "<pre><font color=\"#00FF00\">" + QString(msg) + "</font></pre>";
-    else if (type == 2) msgInHTML = "<pre><font color=\"#FFBF00\">" + QString(msg) + "</font></pre>";
-    else if (type == 0) msgInHTML = "<pre><font color=\"#FF0000\">" + QString(msg) + "</font></pre>";
+    if (type == 1) msgInHTML = "<pre><font color=\"#00FF00\">" + QString(msg).trimmed() + "</font></pre>";
+    else if (type == 2) msgInHTML = "<pre><font color=\"#FFBF00\">" + QString(msg).trimmed() + "</font></pre>";
+    else if (type == 0) msgInHTML = "<pre><font color=\"#FF0000\">" + QString(msg).trimmed() + "</font></pre>";
     else msgInHTML = "<pre><font color=\"#000000\">" + QString(msg) + "</font></pre>";
     ui->infoBroser->append(msgInHTML);
 }
@@ -73,17 +90,12 @@ void MainWindow::connectNLogin() {
     memset(ipAddr, 0, 32);
     memset(username, 0, 32);
     memset(password, 0, 32);
-    QMessageBox msgbox(QMessageBox::Information, tr("提示"), tr(""));
-
-    msgbox.setButtonText(QMessageBox::Ok, tr("确 定"));
     if (state == Client::BUSY) {
-        msgbox.setText(tr("等待响应..."));
-        msgbox.exec();
+        showMsgbox("Waitint for response...");
         return;
     }
     if (state != Client::IDLE && state != Client::WAITUSER) {
-        msgbox.setText(tr("您已连接！"));
-        msgbox.exec();
+        showMsgbox("You have connected to FTP server.");
         return;
     }
 
@@ -116,8 +128,7 @@ void MainWindow::connectNLogin() {
         ui->pswLineEdit->setText("9");
     }
     else {
-        msgbox.setText(tr("请输入密码！"));
-        msgbox.exec();
+        showMsgbox("Please input password.");
         return;
     }
 
@@ -137,16 +148,16 @@ void MainWindow::disconnNLogout() {
     }
 }
 
-/*void MainWindow::refreshRemoteRoot() {
-    emit refreshRemote(remoteFileModel->getRoot()->text().toLatin1().data());
-}*/
-
 void MainWindow::refreshLocalDir(const QModelIndex& index) {
     FileNode* node = dynamic_cast<FileNode*>(localFileModel->itemFromIndex(index));
     if (!node) return;
     memset(localPath, 0, MAXPATH);
     strcpy(localPath, node->getPath().toLatin1().data());
-    emit refreshLocal(localPath);
+    // emit refreshLocal(localPath);
+
+    if (listDir(localFileList, localPath, "-l")) {
+        displayLocal(localPath, localFileList);
+    }
 }
 
 void MainWindow::refreshRemoteDir(const QModelIndex& index) {
@@ -154,6 +165,7 @@ void MainWindow::refreshRemoteDir(const QModelIndex& index) {
     if (!node) return;
     memset(remotePath, 0, MAXPATH);
     strcpy(remotePath, node->getPath().toLatin1().data());
+    if (state != Client::NORM) return;
     emit refreshRemote(remotePath);
 }
 
@@ -173,15 +185,49 @@ void MainWindow::displayRemote(const char* path, const char* remoteFileList) {
 
 void MainWindow::uploadFile(const QString& srcPath, const QString& srcFile,
                             const QString& dstPath) {
-    QString _srcPath = srcPath+"/"+srcFile;
-    QString _dstPath = dstPath+"/"+srcFile;
+    QString _srcPath;
+    QString _dstPath;
+    if (srcPath[srcPath.length()-1] == '/') {
+        _srcPath = srcPath+srcFile;
+    }
+    else _srcPath = srcPath+"/"+srcFile;
+
+    if (dstPath[dstPath.length()-1] == '/') {
+        _dstPath = dstPath+srcFile;
+    }
+    else _dstPath = dstPath+"/"+srcFile;
+
     memset(src, 0, MAXPATH);
     memset(dst, 0, MAXPATH);
     strcpy(src, _srcPath.toLatin1().data());
     strcpy(dst, _dstPath.toLatin1().data());
+    if (state != Client::NORM) return;
     emit putFile(src, dst);
 }
 
+void MainWindow::downloadFile(const QString& srcPath, const QString& srcFile,
+                              const QString& dstPath) {
+    QString _srcPath;
+    QString _dstPath;
+    if (srcPath[srcPath.length()-1] == '/') {
+        _srcPath = srcPath+srcFile;
+    }
+    else _srcPath = srcPath+"/"+srcFile;
+
+    if (dstPath[dstPath.length()-1] == '/') {
+        _dstPath = dstPath+srcFile;
+    }
+    else _dstPath = dstPath+"/"+srcFile;
+
+    memset(src, 0, MAXPATH);
+    memset(dst, 0, MAXPATH);
+    strcpy(src, _srcPath.toLatin1().data());
+    strcpy(dst, _dstPath.toLatin1().data());
+    if (state != Client::NORM) return;
+    emit getFile(src, dst);
+}
+
 void MainWindow::sendUserInfo() {
+    if (state != Client::WAITUSER) return;
     emit login(username, password);
 }

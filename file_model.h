@@ -10,6 +10,7 @@ public:
     enum Type { EMPTY, FILE, DIR };
     explicit FileNode(const QString& fileName);
     void appendChildren(const QVector<QStringList>& fileList);
+    void clearChildren();
     Type getType();
     QString getPath();
     static QVector<QStringList> parseFileListStr(const QString& fileListStr);
@@ -17,7 +18,7 @@ public:
     static FileNode* findNodeByPath(FileNode* root, const QString& path);
 
 private:
-    void clearChildren();
+
 };
 
 
@@ -28,6 +29,7 @@ public:
     explicit FileModel(QObject* parent = nullptr, const QString& rootPath = "/");
     void addNode(QStandardItem* parent, QStandardItem* child);
     FileNode* getRoot();
+    void initRoot(const QString& rootPath);
     Qt::ItemFlags flags(const QModelIndex &index) const;
     QMimeData *mimeData(const QModelIndexList &indexes) const;
     bool dropMimeData(const QMimeData *data, Qt::DropAction action,

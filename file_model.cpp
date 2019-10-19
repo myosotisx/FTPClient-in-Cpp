@@ -42,14 +42,19 @@ QString FileNode::getPath() {
     if (this->getType() == FILE) {
         p = p->parent();
     }
-    QString path = p->text();
+    QString path;
+    if (p->text().contains(' ')) path = "\""+p->text()+"\"";
+    else path = p->text();
     p = p->parent();
     while (p) {
         int len = p->text().length();
+        QString dirName;
+        if (p->text().contains(' ')) dirName = "\""+p->text()+"\"";
+        else dirName = p->text();
         if (len && p->text()[len-1] == '/') {
-            path = p->text()+path;
+            path = dirName+path;
         }
-        else path = p->text()+'/'+path;
+        else path = dirName+'/'+path;
         p = p->parent();
     }
     return path;
@@ -85,7 +90,7 @@ QVector<QStringList> FileNode::parseFileListStr(const QString& fileListStr) {
 
 void FileNode::appendFakeNode(FileNode* node) {
     if (node->rowCount()) return;
-    FileNode* fakeNode = new FileNode("");
+    FileNode* fakeNode = new FileNode("(empty)");
     node->appendRow(fakeNode);
     node->setChild(fakeNode->index().row(), 1, new FileNode(""));
     node->setChild(fakeNode->index().row(), 2, new FileNode(""));
@@ -96,14 +101,22 @@ void FileNode::appendFakeNode(FileNode* node) {
 FileNode* FileNode::findNodeByPath(FileNode* root, const QString& path) {
     int index = path.indexOf(root->text());
     if (index) return nullptr;
+
     QStringList dirList = path.mid(root->text().length()).split('/', QString::SkipEmptyParts);
     int len = dirList.length();
     QStandardItem* p = root;
     for (int i = 0;i < len;i++) {
+        QString dirName;
+        if (dirList[i][0] == "\""
+            && dirList[i][dirList[i].length()-1] == "\""
+            && dirList[i].contains(' ')) {
+            dirName = dirList[i].mid(1, dirList[i].length()-2);
+        }
+        else dirName = dirList[i];
         int rowCount = p->rowCount();
         bool found = false;
         for (int j = 0;j < rowCount;j++) {
-            if (p->child(j)->text() == dirList[i]) {
+            if (p->child(j)->text() == dirName) {
                 found = true;
                 p = p->child(j);
                 break;
@@ -112,18 +125,30 @@ FileNode* FileNode::findNodeByPath(FileNode* root, const QString& path) {
         if (!found) return nullptr;
     }
     FileNode* node = dynamic_cast<FileNode*>(p);
-    if (node) return node;
+    if (node) {
+        return node;
+    }
     else return nullptr;
 }
 
 FileModel::FileModel(QObject* parent, const QString& rootPath):
-    QStandardItemModel(parent) {
+    QStandardItemModel(parent)
+    , root(nullptr){
     QStringList header;
     header << "文件名" << "文件大小" << "最近修改" << "权限" << "所有者/组";
     setHorizontalHeaderLabels(header);
+    initRoot(rootPath);
+}
 
-    root = new FileNode(rootPath);
-    appendRow(root);
+void FileModel::initRoot(const QString &rootPath) {
+    if (!root) {
+        root = new FileNode(rootPath);
+        appendRow(root);
+    }
+    else {
+        root->clearChildren();
+        root->setText(rootPath);
+    }
     FileNode::appendFakeNode(root);
 }
 

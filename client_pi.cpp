@@ -8,7 +8,6 @@
 
 #include <QDebug>
 
-
 int checkState(const char* response) {
     const char* finalLine;
     if (!(finalLine = searchFinalLine(response))) return -1;
@@ -34,12 +33,18 @@ int request(Client* client, const char* cmd, const char* param) {
     else return 1;
 }
 
-int resCodeMapper(Client* client, int resCode, const char* param) {
+void resCodeMapper(Client* client, int resCode, const char* param) {
     if (resCode == 227) {
         char ipAddr[32];
         int port;
         if (searchIpAddrNPort(param, ipAddr, &port)) {
             setDataConnAddr(client, ipAddr, port);
+        }
+    }
+    else if (resCode == 257) {
+        char rootPath[MAXPATH];
+        if (searchRootPath(param, rootPath)) {
+            setRootPath(client, rootPath);
         }
     }
     setResCode(client, resCode);
