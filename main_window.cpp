@@ -17,11 +17,11 @@ MainWindow::MainWindow(QWidget *parent)
     ui->setupUi(this);
 
     // QFileSystemModel* localFileModel = new QFileSystemModel(this);
-    localFileModel->setRootPath(QDir::currentPath());
+    localFileModel = new FileModel(ui->localFileTree, "/Users/myosotis");
     ui->localFileTree->setModel(localFileModel);
-    ui->localFileTree->setRootIndex(localFileModel->setRootPath("/Users/myosotis"));
+    ui->localFileTree->setDragDropMode(QAbstractItemView::DragDrop);
 
-    remoteFileModel = new FileModel(ui->remoteFileTree);
+    remoteFileModel = new FileModel(ui->remoteFileTree, "/");
     ui->remoteFileTree->setModel(remoteFileModel);
     ui->remoteFileTree->setDragDropMode(QAbstractItemView::DragDrop);
 
@@ -29,16 +29,22 @@ MainWindow::MainWindow(QWidget *parent)
     connect(client, &Client::setState, this, &MainWindow::setState, Qt::QueuedConnection);
     connect(client, &Client::reqUserInfo, this, &MainWindow::sendUserInfo, Qt::QueuedConnection);
     connect(client, &Client::showMsg, this, &MainWindow::displayMsg, Qt::QueuedConnection);
-    connect(client, &Client::showFileList, this, &MainWindow::displayFileList, Qt::QueuedConnection);
+    connect(client, &Client::showLocal, this, &MainWindow::displayLocal, Qt::QueuedConnection);
+    connect(client, &Client::showRemote, this, &MainWindow::displayRemote, Qt::QueuedConnection);
 
     connect(this, &MainWindow::setupControlConn, client, &Client::setupControlConn, Qt::QueuedConnection);
     connect(this, &MainWindow::login, client, &Client::login, Qt::QueuedConnection);
     connect(this, &MainWindow::logout, client, &Client::logout, Qt::QueuedConnection);
-    connect(this, &MainWindow::refresh, client, &Client::refresh, Qt::QueuedConnection);
+    connect(this, &MainWindow::refreshLocal, client, &Client::refreshLocal, Qt::QueuedConnection);
+    connect(this, &MainWindow::refreshRemote, client, &Client::refreshRemote, Qt::QueuedConnection);
+    connect(this, &MainWindow::putFile, client, &Client::putFile, Qt::QueuedConnection);
+
     connect(ui->connBtn, &QPushButton::clicked, this, &MainWindow::connectNLogin);
     connect(ui->disconnBtn, &QPushButton::clicked, this, &MainWindow::disconnNLogout);
-    connect(ui->refreshBtn, &QPushButton::clicked, this, &MainWindow::refreshRemoteRoot);
+    connect(ui->localFileTree, &QTreeView::expanded, this, &MainWindow::refreshLocalDir);
     connect(ui->remoteFileTree, &QTreeView::expanded, this, &MainWindow::refreshRemoteDir);
+
+    connect(remoteFileModel, &FileModel::transfer, this, &MainWindow::uploadFile);
     QThread* controlThread = new QThread;
     client->moveToThread(controlThread);
     controlThread->start();
@@ -131,24 +137,49 @@ void MainWindow::disconnNLogout() {
     }
 }
 
-void MainWindow::refreshRemoteRoot() {
-    emit refresh("/");
+/*void MainWindow::refreshRemoteRoot() {
+    emit refreshRemote(remoteFileModel->getRoot()->text().toLatin1().data());
+}*/
+
+void MainWindow::refreshLocalDir(const QModelIndex& index) {
+    FileNode* node = dynamic_cast<FileNode*>(localFileModel->itemFromIndex(index));
+    if (!node) return;
+    memset(localPath, 0, MAXPATH);
+    strcpy(localPath, node->getPath().toLatin1().data());
+    emit refreshLocal(localPath);
 }
 
 void MainWindow::refreshRemoteDir(const QModelIndex& index) {
     FileNode* node = dynamic_cast<FileNode*>(remoteFileModel->itemFromIndex(index));
     if (!node) return;
-    memset(path, 0, MAXPATH);
-    strcpy(path, node->getPath().toLatin1().data());
-    emit refresh(path);
+    memset(remotePath, 0, MAXPATH);
+    strcpy(remotePath, node->getPath().toLatin1().data());
+    emit refreshRemote(remotePath);
 }
 
-void MainWindow::displayFileList(const char* path, const char* fileList) {
-    QString fileListStr(fileList);
-    FileNode* node = FileNode::findNodeByPath(remoteFileModel->getRoot(), path);
-    //remoteFileModel->getRoot()->appendChildren(FileNode::parseFileListStr(fileListStr));
+void MainWindow::displayLocal(const char* path, const char* localFileList) {
+    QString fileListStr(localFileList);
+    FileNode* node = FileNode::findNodeByPath(localFileModel->getRoot(), path);
     if (!node) return;
     node->appendChildren(FileNode::parseFileListStr(fileListStr));
+}
+
+void MainWindow::displayRemote(const char* path, const char* remoteFileList) {
+    QString fileListStr(remoteFileList);
+    FileNode* node = FileNode::findNodeByPath(remoteFileModel->getRoot(), path);
+    if (!node) return;
+    node->appendChildren(FileNode::parseFileListStr(fileListStr));
+}
+
+void MainWindow::uploadFile(const QString& srcPath, const QString& srcFile,
+                            const QString& dstPath) {
+    QString _srcPath = srcPath+"/"+srcFile;
+    QString _dstPath = dstPath+"/"+srcFile;
+    memset(src, 0, MAXPATH);
+    memset(dst, 0, MAXPATH);
+    strcpy(src, _srcPath.toLatin1().data());
+    strcpy(dst, _dstPath.toLatin1().data());
+    emit putFile(src, dst);
 }
 
 void MainWindow::sendUserInfo() {

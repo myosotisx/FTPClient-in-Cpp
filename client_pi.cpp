@@ -9,17 +9,6 @@
 #include <QDebug>
 
 
-int recvFileList(int dataConnfd, char* fileList) {
-    int readLen;
-    readLen = readBuf(dataConnfd, fileList);
-    close(dataConnfd);
-    if (readLen == -1) return -1;
-    else {
-        fileList[readLen] = 0;
-        return 1;
-    }
-}
-
 int checkState(const char* response) {
     const char* finalLine;
     if (!(finalLine = searchFinalLine(response))) return -1;

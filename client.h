@@ -32,13 +32,16 @@ signals:
     void setState(int);
     void reqUserInfo();
     void showMsg(const char* msg);
-    void showFileList(const char* path, const char* fileList);
+    void showLocal(const char* path, const char* localFileList);
+    void showRemote(const char* path, const char* remoteFileList);
 
 public slots:
     void setupControlConn(const char* ipAddr, int port);
     void login(const char* username, const char* password);
     void logout();
-    void refresh(const char* path);
+    void refreshLocal(const char* path);
+    void refreshRemote(const char* path);
+    void putFile(const char* src, const char* dst);
 
 private:
     State state;
@@ -50,7 +53,8 @@ private:
     char ipAddr[32];
     int port;
     char buf[BUFCNT][MAXBUF];
-    char fileList[MAXBUF];
+    char localFileList[MAXBUF];
+    char remoteFileList[MAXBUF];
 
     pthread_t controlThread;
 

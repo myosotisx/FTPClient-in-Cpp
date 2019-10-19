@@ -25,18 +25,18 @@ class FileModel: public QStandardItemModel {
     Q_OBJECT
 
 public:
-    explicit FileModel(QObject* parent = nullptr);
+    explicit FileModel(QObject* parent = nullptr, const QString& rootPath = "/");
     void addNode(QStandardItem* parent, QStandardItem* child);
     FileNode* getRoot();
-
-
     Qt::ItemFlags flags(const QModelIndex &index) const;
-
     QMimeData *mimeData(const QModelIndexList &indexes) const;
-
-    bool dropMimeData(const QMimeData *data, Qt::DropAction action, int row, int column, const QModelIndex &parent);
-
+    bool dropMimeData(const QMimeData *data, Qt::DropAction action,
+                      int row, int column, const QModelIndex &parent);
     QStringList mimeTypes() const;
+
+signals:
+    void transfer(const QString& srcPath, const QString& srcFile,
+                  const QString& dstPath);
 
 
 private:

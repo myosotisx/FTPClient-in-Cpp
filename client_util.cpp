@@ -10,7 +10,6 @@
 
 #include <string.h>
 #include <stdlib.h>
-#include <stdio.h>
 
 #include <regex.h>
 
@@ -204,4 +203,57 @@ int getResCodeNParam(const char* response, int* stateCode, char* param) {
     return 1;
 }
 
+char* listDir(char* fileList, const char* path, const char* param) {
+    char cmd[MAXCMD];
+    char tmp[MAXLINE];
+    int lineLen;
+    int totLen = 0;
+    memset(fileList, 0, MAXBUF);
+    memset(cmd, 0, MAXCMD);
+    strcpy(cmd, "cd ");
+    strcat(cmd, path);
+    strcat(cmd, "; ls ");
+    strcat(cmd, param);
+    // printf("cmd: %s\r\n", cmd);
+    qDebug() << "cmd:" << cmd;
+    FILE* pipe = popen(cmd, "r");
+    if (!pipe) return NULL;
+
+    while (fgets(tmp, MAXLINE, pipe)) {
+        lineLen = strlen(tmp);
+        if (tmp[lineLen-1] == '\n' && tmp[lineLen-2] != '\r') {
+            tmp[lineLen-1] = '\r';
+            tmp[lineLen] = '\n';
+            tmp[lineLen+1] = 0;
+            lineLen += 1;
+        }
+        if ((totLen += lineLen) > MAXBUF) break; // 此处限制了获取列表的最大长度
+        else strcat(fileList, tmp);
+    }
+    pclose(pipe);
+    return fileList;
+}
+
+int recvFileList(int dataConnfd, char* fileList) {
+    int readLen;
+    readLen = readBuf(dataConnfd, fileList);
+    close(dataConnfd);
+    if (readLen == -1) return -1;
+    else {
+        fileList[readLen] = 0;
+        return 1;
+    }
+}
+
+int sendFile(int dataConnfd, FILE* file) {
+    unsigned char fileBuf[MAXBUF];
+    int readLen, writeLen = -1;
+    while ((readLen = fread(fileBuf, sizeof(unsigned char), MAXBUF, file))) {
+        if ((writeLen = write(dataConnfd, fileBuf, readLen)) == -1) {
+            break;
+        }
+    }
+    if (writeLen == -1) return -1;
+    else return 1;
+}
 

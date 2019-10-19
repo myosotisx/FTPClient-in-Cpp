@@ -127,7 +127,13 @@ void Client::logout() {
     setClientState(this, IDLE);
 }
 
-void Client::refresh(const char* path) {
+void Client::refreshLocal(const char* path) {
+    if (listDir(localFileList, path, "-l")) {
+        emit showLocal(path, localFileList);
+    }
+}
+
+void Client::refreshRemote(const char* path) {
     if (state != NORM) return;
 
     setClientState(this, BUSY);
@@ -137,16 +143,46 @@ void Client::refresh(const char* path) {
         && (dataConnfd = setupConn(ipAddr, port, 1)) != -1
         && request(this, "LIST", path) != -1
         && waitResCode(150, 5)
-        && recvFileList(dataConnfd, fileList) != -1
+        && recvFileList(dataConnfd, remoteFileList) != -1
         && waitResCode(226, 5)) {
         close(dataConnfd);
         dataConnfd = -1;
 
-        emit showFileList(path, fileList);
+        emit showRemote(path, remoteFileList);
     }
     else qDebug() << "接收文件列表失败！";
     if (state != IDLE) setClientState(this, nState);
 }
 
+void Client::putFile(const char* src, const char* dst) {
+    qDebug() << "src:" << src << "dst:" << dst;
+    if (state != NORM) return;
+
+    setClientState(this, BUSY);
+    State nState = NORM;
+    FILE* file = fopen(src, "rb");
+    if (!file) {
+        qDebug() << "Fail to open file!";
+        if (state != IDLE) setClientState(this, nState);
+        return;
+    }
+    if (request(this, "TYPE", "I") != -1
+        && waitResCode(200, 5)
+        && request(this, "PASV", nullptr) != -1
+        && waitResCode(227, 5)
+        && (dataConnfd = setupConn(ipAddr, port, 1)) != -1
+        && request(this, "STOR", dst) != -1
+        && waitResCode(150, 5)
+        && sendFile(dataConnfd, file) != -1) {
+        close(dataConnfd);
+        if (waitResCode(226, 5)) qDebug() << "传输文件成功";
+        else {
+            qDebug() << "传输文件完成，服务器未响应";
+        }
+    }
+    else qDebug() << "传输文件失败";
+    fclose(file);
+    if (state != IDLE) setClientState(this, nState);
+}
 
 

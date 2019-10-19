@@ -67,7 +67,6 @@ QVector<QStringList> FileNode::parseFileListStr(const QString& fileListStr) {
     QString filename, size, modifyDate, authority, ownerNGroup;
     int len = infoList.length();
     for (int i = 0;i < len;i++) {
-        // qDebug() << infoList[i].section(' ', 8, -1, QString::SectionSkipEmpty);
         filename = infoList[i].section(' ', 8, -1, QString::SectionSkipEmpty);
         size = infoList[i].section(' ', 4, 4, QString::SectionSkipEmpty);
         modifyDate = infoList[i].section(' ', 5, 7, QString::SectionSkipEmpty);
@@ -81,13 +80,12 @@ QVector<QStringList> FileNode::parseFileListStr(const QString& fileListStr) {
             fileList.append(file);
         }
     }
-    qDebug() << fileList;
     return fileList;
 }
 
 void FileNode::appendFakeNode(FileNode* node) {
     if (node->rowCount()) return;
-    FileNode* fakeNode = new FileNode("(Refresh to get content...)");
+    FileNode* fakeNode = new FileNode("");
     node->appendRow(fakeNode);
     node->setChild(fakeNode->index().row(), 1, new FileNode(""));
     node->setChild(fakeNode->index().row(), 2, new FileNode(""));
@@ -96,7 +94,9 @@ void FileNode::appendFakeNode(FileNode* node) {
 }
 
 FileNode* FileNode::findNodeByPath(FileNode* root, const QString& path) {
-    QStringList dirList = path.split('/', QString::SkipEmptyParts);
+    int index = path.indexOf(root->text());
+    if (index) return nullptr;
+    QStringList dirList = path.mid(root->text().length()).split('/', QString::SkipEmptyParts);
     int len = dirList.length();
     QStandardItem* p = root;
     for (int i = 0;i < len;i++) {
@@ -116,17 +116,13 @@ FileNode* FileNode::findNodeByPath(FileNode* root, const QString& path) {
     else return nullptr;
 }
 
-
-
-
-
-FileModel::FileModel(QObject* parent):
+FileModel::FileModel(QObject* parent, const QString& rootPath):
     QStandardItemModel(parent) {
     QStringList header;
     header << "文件名" << "文件大小" << "最近修改" << "权限" << "所有者/组";
     setHorizontalHeaderLabels(header);
 
-    root = new FileNode("/");
+    root = new FileNode(rootPath);
     appendRow(root);
     FileNode::appendFakeNode(root);
 }
@@ -148,15 +144,13 @@ QMimeData* FileModel::mimeData(const QModelIndexList &indexes) const {
     FileNode* node = dynamic_cast<FileNode*>(itemFromIndex(indexes.at(0)));
     if (!node) return 0;
 
-    FileNode::Type type = node->getType();
-    if (type == FileNode::EMPTY) return 0;
-    else if (node->getType() == FileNode::FILE) {
+    if (node->getType() == FileNode::FILE) {
+        // 仅允许拖拽文件
+        data->setData("path", node->getPath().toLocal8Bit());
         data->setData("filename", node->text().toLocal8Bit());
     }
-    else {
-        data->setData("filename", QString("").toLocal8Bit());
-    }
-    data->setData("path", node->getPath().toLocal8Bit());
+    else return 0;
+
     return data;
 }
 
@@ -171,6 +165,7 @@ bool FileModel::dropMimeData(const QMimeData *data, Qt::DropAction action, int r
 
     qDebug() << node->getPath();
 
+    emit transfer(path, filename, node->getPath());
     return true;
 }
 

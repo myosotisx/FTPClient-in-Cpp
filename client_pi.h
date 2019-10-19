@@ -3,8 +3,6 @@
 
 #include "client_util.h"
 
-int recvFileList(int dataConnfd, char* fileList);
-
 int checkState(const char* response);
 
 int request(Client* client, const char* cmd, const char* param);
