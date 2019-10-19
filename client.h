@@ -32,13 +32,13 @@ signals:
     void setState(int);
     void reqUserInfo();
     void showMsg(const char* msg);
-    void showFileList(const char* fileList);
+    void showFileList(const char* path, const char* fileList);
 
 public slots:
     void setupControlConn(const char* ipAddr, int port);
     void login(const char* username, const char* password);
     void logout();
-    void refresh();
+    void refresh(const char* path);
 
 private:
     State state;

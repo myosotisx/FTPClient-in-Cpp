@@ -127,7 +127,7 @@ void Client::logout() {
     setClientState(this, IDLE);
 }
 
-void Client::refresh() {
+void Client::refresh(const char* path) {
     if (state != NORM) return;
 
     setClientState(this, BUSY);
@@ -135,14 +135,14 @@ void Client::refresh() {
     if (request(this, "PASV", nullptr) != -1
         && waitResCode(227, 5)
         && (dataConnfd = setupConn(ipAddr, port, 1)) != -1
-        && request(this, "LIST", nullptr) != -1
+        && request(this, "LIST", path) != -1
         && waitResCode(150, 5)
         && recvFileList(dataConnfd, fileList) != -1
         && waitResCode(226, 5)) {
         close(dataConnfd);
         dataConnfd = -1;
 
-        emit showFileList(fileList);
+        emit showFileList(path, fileList);
     }
     else qDebug() << "接收文件列表失败！";
     if (state != IDLE) setClientState(this, nState);

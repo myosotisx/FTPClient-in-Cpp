@@ -16,7 +16,7 @@ MainWindow::MainWindow(QWidget *parent)
     , port(21) {
     ui->setupUi(this);
 
-    QFileSystemModel* localFileModel = new QFileSystemModel(this);
+    // QFileSystemModel* localFileModel = new QFileSystemModel(this);
     localFileModel->setRootPath(QDir::currentPath());
     ui->localFileTree->setModel(localFileModel);
     ui->localFileTree->setRootIndex(localFileModel->setRootPath("/Users/myosotis"));
@@ -37,7 +37,8 @@ MainWindow::MainWindow(QWidget *parent)
     connect(this, &MainWindow::refresh, client, &Client::refresh, Qt::QueuedConnection);
     connect(ui->connBtn, &QPushButton::clicked, this, &MainWindow::connectNLogin);
     connect(ui->disconnBtn, &QPushButton::clicked, this, &MainWindow::disconnNLogout);
-    connect(ui->refreshBtn, &QPushButton::clicked, this, &MainWindow::refreshFileList);
+    connect(ui->refreshBtn, &QPushButton::clicked, this, &MainWindow::refreshRemoteRoot);
+    connect(ui->remoteFileTree, &QTreeView::expanded, this, &MainWindow::refreshRemoteDir);
     QThread* controlThread = new QThread;
     client->moveToThread(controlThread);
     controlThread->start();
@@ -130,14 +131,24 @@ void MainWindow::disconnNLogout() {
     }
 }
 
-void MainWindow::refreshFileList() {
-    emit refresh();
+void MainWindow::refreshRemoteRoot() {
+    emit refresh("/");
 }
 
-void MainWindow::displayFileList(const char* fileList) {
-    FileNode node("wdnmd");
+void MainWindow::refreshRemoteDir(const QModelIndex& index) {
+    FileNode* node = dynamic_cast<FileNode*>(remoteFileModel->itemFromIndex(index));
+    if (!node) return;
+    memset(path, 0, MAXPATH);
+    strcpy(path, node->getPath().toLatin1().data());
+    emit refresh(path);
+}
+
+void MainWindow::displayFileList(const char* path, const char* fileList) {
     QString fileListStr(fileList);
-    remoteFileModel->getRoot()->appendChildren(FileNode::parseFileListStr(fileListStr));
+    FileNode* node = FileNode::findNodeByPath(remoteFileModel->getRoot(), path);
+    //remoteFileModel->getRoot()->appendChildren(FileNode::parseFileListStr(fileListStr));
+    if (!node) return;
+    node->appendChildren(FileNode::parseFileListStr(fileListStr));
 }
 
 void MainWindow::sendUserInfo() {

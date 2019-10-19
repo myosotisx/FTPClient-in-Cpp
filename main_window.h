@@ -22,26 +22,30 @@ signals:
     void setupControlConn(const char* ipAddr, int port);
     void login(const char* username, const char* password);
     void logout();
-    void refresh();
+    void refresh(const char* path);
 
 public slots:
     void setState(int state);
     void connectNLogin();
     void disconnNLogout();
-    void refreshFileList();
+    // void refreshFileList(const QModelIndex& index);
+    void refreshRemoteRoot();
+    void refreshRemoteDir(const QModelIndex& index);
     void displayMsg(const char* msg);
-    void displayFileList(const char* fileList);
+    void displayFileList(const char* path, const char* fileList);
     void sendUserInfo();
 
 private:
     Ui::MainWindow *ui;
     Client::State state;
     Client* client;
+    FileModel* localFileModel;
     FileModel* remoteFileModel;
     QThread* controlThread;
     char ipAddr[32];
     int port;
     char username[32];
     char password[32];
+    char path[MAXPATH];
 };
 #endif // MAINWINDOW_H

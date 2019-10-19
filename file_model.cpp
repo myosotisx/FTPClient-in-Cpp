@@ -10,24 +10,38 @@ FileNode::FileNode(const QString& filename):
 
 void FileNode::appendChildren(const QVector<QStringList>& fileList) {
     int len = fileList.length();
+    if (len) clearChildren();
     for (int i = 0;i < len;i++) {
         FileNode* node = new FileNode(fileList[i][0]);
+
         appendRow(node);
         setChild(node->index().row(), 1, new FileNode(fileList[i][1]));
         setChild(node->index().row(), 2, new FileNode(fileList[i][2]));
         setChild(node->index().row(), 3, new FileNode(fileList[i][3]));
         setChild(node->index().row(), 4, new FileNode(fileList[i][4]));
+        if (fileList[i][3][0] == 'd') {
+            appendFakeNode(node);
+        }
     }
 }
 
 FileNode::Type FileNode::getType() {
+    QStandardItem* _this = this;
+    if (!_this->parent()) return DIR; // 根目录
     QModelIndex index = model()->indexFromItem(this).siblingAtColumn(3);
-    if (model()->itemFromIndex(index)->text()[0] == 'd') return DIR;
+    QString text = model()->itemFromIndex(index)->text();
+    if (text[0] == 'd') return DIR;
+    else if (text.isEmpty()) {
+        return EMPTY;
+    }
     else return FILE;
 }
 
 QString FileNode::getPath() {
     QStandardItem* p = this;
+    if (this->getType() == FILE) {
+        p = p->parent();
+    }
     QString path = p->text();
     p = p->parent();
     while (p) {
@@ -39,6 +53,10 @@ QString FileNode::getPath() {
         p = p->parent();
     }
     return path;
+}
+
+void FileNode::clearChildren() {
+    removeRows(0, rowCount());
 }
 
 QVector<QStringList> FileNode::parseFileListStr(const QString& fileListStr) {
@@ -67,6 +85,41 @@ QVector<QStringList> FileNode::parseFileListStr(const QString& fileListStr) {
     return fileList;
 }
 
+void FileNode::appendFakeNode(FileNode* node) {
+    if (node->rowCount()) return;
+    FileNode* fakeNode = new FileNode("(Refresh to get content...)");
+    node->appendRow(fakeNode);
+    node->setChild(fakeNode->index().row(), 1, new FileNode(""));
+    node->setChild(fakeNode->index().row(), 2, new FileNode(""));
+    node->setChild(fakeNode->index().row(), 3, new FileNode(""));
+    node->setChild(fakeNode->index().row(), 4, new FileNode(""));
+}
+
+FileNode* FileNode::findNodeByPath(FileNode* root, const QString& path) {
+    QStringList dirList = path.split('/', QString::SkipEmptyParts);
+    int len = dirList.length();
+    QStandardItem* p = root;
+    for (int i = 0;i < len;i++) {
+        int rowCount = p->rowCount();
+        bool found = false;
+        for (int j = 0;j < rowCount;j++) {
+            if (p->child(j)->text() == dirList[i]) {
+                found = true;
+                p = p->child(j);
+                break;
+            }
+        }
+        if (!found) return nullptr;
+    }
+    FileNode* node = dynamic_cast<FileNode*>(p);
+    if (node) return node;
+    else return nullptr;
+}
+
+
+
+
+
 FileModel::FileModel(QObject* parent):
     QStandardItemModel(parent) {
     QStringList header;
@@ -75,6 +128,7 @@ FileModel::FileModel(QObject* parent):
 
     root = new FileNode("/");
     appendRow(root);
+    FileNode::appendFakeNode(root);
 }
 
 FileNode* FileModel::getRoot() {
@@ -90,25 +144,39 @@ Qt::ItemFlags FileModel::flags(const QModelIndex &index) const {
 QMimeData* FileModel::mimeData(const QModelIndexList &indexes) const {
     if (indexes.count() <= 0) return 0;
 
-    FileNode* node = dynamic_cast<FileNode*>(itemFromIndex(indexes.at(0)));
-
-    qDebug() << node->getPath();
-
     QMimeData *data = new QMimeData;
-    data->setData("filename", itemFromIndex(indexes.at(0))->text().toLocal8Bit());
-    data->setData("size", itemFromIndex(indexes.at(1))->text().toLocal8Bit());
+    FileNode* node = dynamic_cast<FileNode*>(itemFromIndex(indexes.at(0)));
+    if (!node) return 0;
+
+    FileNode::Type type = node->getType();
+    if (type == FileNode::EMPTY) return 0;
+    else if (node->getType() == FileNode::FILE) {
+        data->setData("filename", node->text().toLocal8Bit());
+    }
+    else {
+        data->setData("filename", QString("").toLocal8Bit());
+    }
+    data->setData("path", node->getPath().toLocal8Bit());
     return data;
 }
 
 bool FileModel::dropMimeData(const QMimeData *data, Qt::DropAction action, int row, int column, const QModelIndex &parent) {
+    QModelIndex index = parent.siblingAtColumn(0);
+    FileNode* node = dynamic_cast<FileNode*>(itemFromIndex(index));
+    if (!node) return false;
+
+    QString path = QString::fromLocal8Bit(data->data("path"));
     QString filename = QString::fromLocal8Bit(data->data("filename"));
-    QString size = QString::fromLocal8Bit(data->data("size"));
-    qDebug() << "filename:" << filename << "size:" << size;
+    qDebug() << "path:" << path << "filename:" << filename;
+
+    qDebug() << node->getPath();
+
+    return true;
 }
 
 QStringList FileModel::mimeTypes() const {
     QStringList types;
-    types << "filename" << "size";
+    types << "path" << "filename";
     return types;
 }
 
