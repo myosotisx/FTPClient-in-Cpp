@@ -236,8 +236,6 @@ int searchRootPath(const char* str, char* rootPath) {
     if (regexec(&reg, str, 1, pMatch, 0) != REG_NOMATCH) {
         memset(rootPath, 0, MAXPATH);
         strncpy(rootPath, str+pMatch[0].rm_so+1, pMatch[0].rm_eo-pMatch[0].rm_so-2);
-        qDebug() << pMatch[0].rm_so << pMatch[0].rm_eo;
-        qDebug() << "rootPath:" << rootPath;
         regfree(&reg);
         return 1;
     }
@@ -304,8 +302,6 @@ char* listDir(char* fileList, const char* path, const char* param) {
     strcat(cmd, path);
     strcat(cmd, "; ls ");
     strcat(cmd, param);
-    // printf("cmd: %s\r\n", cmd);
-    qDebug() << "cmd:" << cmd;
     pipe = popen(cmd, "r");
     if (!pipe) return nullptr;
 

@@ -65,7 +65,6 @@ void FileNode::clearChildren() {
 }
 
 QVector<QStringList> FileNode::parseFileListStr(const QString& fileListStr) {
-    // QStringList infoList = fileListStr.split(QRegExp("[\r][\n]"));
     QStringList infoList = fileListStr.split("\r\n", QString::SkipEmptyParts);
     QRegExp regex("[ ]+");
     QVector<QStringList> fileList;

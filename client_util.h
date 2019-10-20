@@ -31,6 +31,10 @@ void setResCode(Client* client, int resCode);
 
 void setRootPath(Client* client, const char* rootPath);
 
+void setLastSendTime(Client* client, long sec, long usec);
+
+double getLastSendTime(Client* client);
+
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 
 int readBuf(int sockfd, void* buf);

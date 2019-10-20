@@ -64,6 +64,17 @@ void setRootPath(Client* client, const char* rootPath) {
     strcpy(client->rootPath, rootPath);
 }
 
+void setLastSendTime(Client* client, long sec, long usec) {
+    client->lastSendTime.tv_sec = sec;
+    client->lastSendTime.tv_usec = usec;
+}
+
+double getLastSendTime(Client* client) {
+    double timeStamp = (1000000*client->lastSendTime.tv_sec
+                     +client->lastSendTime.tv_usec)/1000.0;
+    return timeStamp;
+}
+
 Client::Client(QObject* parent):
     QObject(parent)
     , state(IDLE)
@@ -73,6 +84,8 @@ Client::Client(QObject* parent):
     , dataListenfd(-1)
     , mode(0)
     , bufp(0) {
+
+    gettimeofday(&lastSendTime, nullptr);
 }
 
 char* Client::nextBuf() {
@@ -89,8 +102,10 @@ int Client::waitResCode(int resCode, double timeout) {
         double timeuse = 1000000*(endtime.tv_sec-starttime.tv_sec)
                          +endtime.tv_usec-starttime.tv_usec;
         if (timeuse/1000 > 1000*timeout) return 0;
-        if (timeuse/1000 < 100) continue;
-        if (this->resCode == resCode) return 1;
+        if (this->resCode == resCode) {
+            resCode = -1;
+            return 1;
+        }
 
     }
 }
@@ -206,16 +221,17 @@ void Client::refreshRemote(const char* path) {
             && (dataConnfd = waitConn(dataListenfd, 5)) != -1
             && recvFileList(dataConnfd, remoteFileList) != -1
             && waitResCode(226, 5)) {
+            close(dataConnfd);
+            close(dataListenfd);
+            dataConnfd = -1;
+            dataListenfd = -1;
 
             emit showRemote(path, remoteFileList);
             emit showMsg("Client: Refresh remote file list success.", 1);
         }
         else emit showMsg("Client: Fail to refresh remote file list.", 0);
     }
-    close(dataConnfd);
-    close(dataListenfd);
-    dataConnfd = -1;
-    dataListenfd = -1;
+
 
     if (state != IDLE) setClientState(this, nState);
 }

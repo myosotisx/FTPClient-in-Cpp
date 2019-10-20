@@ -2,6 +2,7 @@
 
 #include "string.h"
 
+#include <sys/time.h>
 #include <unistd.h>
 
 #include <ctype.h>
@@ -24,8 +25,15 @@ int request(Client* client, const char* cmd, const char* param) {
 
     char request[MAXREQ];
     concatCmdNParam(request, cmd, param);
-    qDebug() << "request:" << request;
+
+    timeval time;
+    while (1) {
+        gettimeofday(&time, nullptr);
+        double timeuse = (1000000*time.tv_sec+time.tv_usec)/1000.0-getLastSendTime(client);
+        if (timeuse > 500) break;
+    }
     int res = writeBuf(getControlConnfd(client), request, strlen(request));
+    setLastSendTime(client, time.tv_sec, time.tv_usec);
     if (res == -1) {
         setClientState(client, 0);
         return -1;

@@ -28,6 +28,8 @@ public:
     friend void setDataConnAddr(Client* client, const char* ipAddr, int port);
     friend void setResCode(Client* client, int resCode);
     friend void setRootPath(Client* client, const char* rootPath);
+    friend void setLastSendTime(Client* client, long sec, long usec);
+    friend double getLastSendTime(Client* client);
 
 signals:
     void setState(int);
@@ -66,6 +68,8 @@ private:
     char* nextBuf();
     int waitResCode(int stateCode, double timeout);
     int waitConn(int listenfd, double timeout);
+
+    timeval lastSendTime;
 
 };
 

@@ -3,6 +3,8 @@
 
 #include "client_util.h"
 
+#include <sys/time.h>
+
 int checkState(const char* response);
 
 int request(Client* client, const char* cmd, const char* param);

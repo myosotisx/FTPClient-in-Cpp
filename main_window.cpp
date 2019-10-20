@@ -38,7 +38,6 @@ MainWindow::MainWindow(QWidget *parent)
     connect(this, &MainWindow::setupControlConn, client, &Client::setupControlConn, Qt::QueuedConnection);
     connect(this, &MainWindow::login, client, &Client::login, Qt::QueuedConnection);
     connect(this, &MainWindow::logout, client, &Client::logout, Qt::QueuedConnection);
-    // connect(this, &MainWindow::refreshLocal, client, &Client::refreshLocal, Qt::QueuedConnection);
     connect(this, &MainWindow::refreshRemote, client, &Client::refreshRemote, Qt::QueuedConnection);
     connect(this, &MainWindow::putFile, client, &Client::putFile, Qt::QueuedConnection);
     connect(this, &MainWindow::getFile, client, &Client::getFile, Qt::QueuedConnection);
