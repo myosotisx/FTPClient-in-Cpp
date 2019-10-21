@@ -47,6 +47,7 @@ MainWindow::MainWindow(QWidget *parent)
     connect(this, &MainWindow::getFile, client, &Client::getFile, Qt::QueuedConnection);
     connect(this, &MainWindow::switchMode, client, &Client::switchMode, Qt::QueuedConnection);
     connect(this, &MainWindow::removeRemote, client, &Client::removeRemote, Qt::QueuedConnection);
+    connect(this, &MainWindow::renameRemote, client, &Client::renameRemote, Qt::QueuedConnection);
 
     connect(ui->connBtn, &QPushButton::clicked, this, &MainWindow::connectNLogin);
     connect(ui->disconnBtn, &QPushButton::clicked, this, &MainWindow::disconnNLogout);
@@ -59,7 +60,7 @@ MainWindow::MainWindow(QWidget *parent)
 
     connect(remoteFileModel, &FileModel::transfer, this, &MainWindow::uploadFile);
     connect(localFileModel, &FileModel::transfer, this, &MainWindow::downloadFile);
-
+    connect(remoteFileModel, &FileModel::textChanged, this, &MainWindow::changeNameRemote);
     // connect(remoteFileModel, &FileModel::itemChanged, this, &MainWindow::test);
 
     QThread* controlThread = new QThread;
@@ -73,7 +74,7 @@ MainWindow::~MainWindow() {
 
 void MainWindow::initMenu() {
     QAction* acRename = new QAction("Rename", this);
-    connect(acRename, &QAction::triggered, this, &MainWindow::renameRemote);
+    connect(acRename, &QAction::triggered, this, &MainWindow::setEditState);
     remoteMenu->addAction(acRename);
 
     QAction* acDelete = new QAction("Delete", this);
@@ -294,12 +295,12 @@ void MainWindow::sendUserInfo() {
     emit login(username, password);
 }
 
-
-void MainWindow::createRemote() {
+void MainWindow::setEditState() {
 
 }
 
-void MainWindow::renameRemote() {
+void MainWindow::createRemote() {
+
 }
 
 void MainWindow::deleteRemote() {
@@ -314,6 +315,16 @@ void MainWindow::deleteRemote() {
     emit removeRemote(remotePath[0], remotePath[1], node->getType()); // 2为文件夹
 }
 
-void MainWindow::test(QStandardItem *item) {
+void MainWindow::changeNameRemote(const QModelIndex& index, const QString& oldName) {
+    if (!checkClientState()) return;
+    FileNode* node = dynamic_cast<FileNode*>(remoteFileModel->itemFromIndex(index));
+    if (!node) return;
+    memset(remotePath[0], 0, MAXPATH);
+    strcpy(remotePath[0], oldName.toLatin1().data());
+    memset(remotePath[1], 0, MAXPATH);
+    strcpy(remotePath[1], node->getFilePath().toLatin1().data());
+    memset(remotePath[2], 0, MAXPATH);
+    strcpy(remotePath[2], node->getParentPath().toLatin1().data());
+    emit renameRemote(remotePath[0], remotePath[1], remotePath[2]);
 
 }

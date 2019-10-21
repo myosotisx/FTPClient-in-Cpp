@@ -40,8 +40,9 @@ FileNode::Type FileNode::getType() {
 }
 
 QString FileNode::getPath() {
+    if (getType() == EMPTY) return QString();
     QStandardItem* p = this;
-    if (this->getType() == FILE) {
+    if (getType() == FILE) {
         p = p->parent();
     }
     QString path;
@@ -62,11 +63,20 @@ QString FileNode::getPath() {
     return path;
 }
 
+QString FileNode::getFilePath() {
+    if (getType() == FILE) {
+        QString path = getPath();
+        if (path.endsWith('/')) return path+text();
+        else return path+"/"+text();
+    }
+    else return getPath();
+}
+
 QString FileNode::getParentPath() {
     QStandardItem* _this = this;
     FileNode* parent = dynamic_cast<FileNode*>(_this->parent());
     if (parent) return parent->getPath();
-    else return this->getPath();
+    else return getPath();
 }
 
 void FileNode::clearChildren() {
@@ -146,7 +156,7 @@ QIcon FileNode::autoGetIcon(const QString &filename, Type type) {
     else {
         QIcon icon;
         QList<QMimeType> mime_types = mime_database.mimeTypesForFileName(filename);
-        qDebug() << mime_types.count();
+        // qDebug() << mime_types.count();
         for (int i=0; i < mime_types.count() && icon.isNull(); i++) {
             icon = QIcon::fromTheme(mime_types[i].iconName());
             // qDebug() << mime_types[i].iconName();
@@ -160,6 +170,7 @@ QIcon FileNode::autoGetIcon(const QString &filename, Type type) {
     }
 }
 
+
 FileModel::FileModel(const QString &_id, QObject* parent, const QString& rootPath):
     QStandardItemModel(parent)
     , id(_id)
@@ -168,6 +179,8 @@ FileModel::FileModel(const QString &_id, QObject* parent, const QString& rootPat
     header << "Filename" << "Size" << "Last Modify" << "Authority" << "Owner/Group";
     setHorizontalHeaderLabels(header);
     initRoot(rootPath);
+
+    connect(this, &QAbstractItemModel::dataChanged, this, &FileModel::checkTextChanged);
 }
 
 void FileModel::initRoot(const QString &rootPath) {
@@ -190,8 +203,11 @@ Qt::ItemFlags FileModel::flags(const QModelIndex &index) const {
     Qt::ItemFlags flags = QAbstractItemModel::flags(index);
     QStandardItem* item = itemFromIndex(index);
     FileNode* node = dynamic_cast<FileNode*>(item);
-    if (index.column() != 0 || !node) {
+    if (index.column() != 0 || !node || node->getType() == FileNode::EMPTY) {
         return flags;
+    }
+    else if (!item->parent()) {
+        flags = flags | Qt::ItemIsDropEnabled;
     }
     else {
         flags = flags | Qt::ItemIsDragEnabled | Qt::ItemIsDropEnabled | Qt::ItemIsEditable;
@@ -238,6 +254,24 @@ QStringList FileModel::mimeTypes() const {
     QStringList types;
     types << "path" << "filename";
     return types;
+}
+
+void FileModel::checkTextChanged(const QModelIndex& index) {
+    if (index.data(FileNode::CompareRole).isNull()) {
+        // 初始化过程中设置CompareRole，不发送信号
+        setData(index, index.data(Qt::EditRole), FileNode::CompareRole);
+        return;
+    }
+    if (index.data(Qt::EditRole) == index.data(FileNode::CompareRole)) return;
+    else {
+        FileNode* node = dynamic_cast<FileNode*>(itemFromIndex(index));
+        if (!node) return;
+        QString path = node->getPath();
+        if (path.endsWith('/')) path = path+index.data(FileNode::CompareRole).toString();
+        else path = path+"/"+index.data(FileNode::CompareRole).toString();
+        emit textChanged(index, path);
+        setData(index, index.data(Qt::EditRole), FileNode::CompareRole);
+    }
 }
 
 

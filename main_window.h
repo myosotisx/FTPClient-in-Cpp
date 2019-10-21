@@ -28,6 +28,7 @@ signals:
     void getFile(const char* src, const char* dst);
     void switchMode(int mode);
     void removeRemote(const char* path, const char* parentPath, int type);
+    void renameRemote(const char* oldPath, const char* newPath, const char* parentPath);
 
 public slots:
     void setState(int state);
@@ -48,11 +49,10 @@ public slots:
     void downloadFile(const QString& srcPath, const QString& srcFile,
                       const QString& dstPath);
     void sendUserInfo();
-    void renameRemote();
+    void setEditState();
     void deleteRemote();
     void createRemote();
-
-    void test(QStandardItem *item);
+    void changeNameRemote(const QModelIndex& index, const QString& oldName);
 
 private:
     Ui::MainWindow *ui;
@@ -67,7 +67,7 @@ private:
     char username[32];
     char password[32];
     char localPath[MAXPATH];
-    char remotePath[2][MAXPATH];
+    char remotePath[10][MAXPATH];
     char src[MAXPATH];
     char dst[MAXPATH];
     char localFileList[MAXBUF];

@@ -377,6 +377,26 @@ void Client::removeRemote(const char* path, const char* parentPath, int type) {
         }
         else emit showMsg("Client: Fail to remove directory.", 0);
     }
+    if (state != IDLE) {
+        setClientState(this, nState);
+        refreshRemote(parentPath);
+    }
+}
+
+void Client::renameRemote(const char* oldPath, const char* newPath, const char* parentPath) {
+    qDebug() << oldPath << newPath << parentPath;
+    if (state != NORM) return;
+
+    setClientState(this, BUSY);
+    State nState = NORM;
+    if (request(this, "RNFR", oldPath) != -1
+        && waitResCode(350, 5)
+        && request(this, "RNTO", newPath) != -1
+        && waitResCode(250, 5)) {
+
+        emit showMsg("Client: Rename file/directory success.", 1);
+    }
+    else emit showMsg("Client: Fail to rename file/directory.", 0);
 
     if (state != IDLE) {
         setClientState(this, nState);
