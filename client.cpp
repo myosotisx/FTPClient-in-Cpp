@@ -82,7 +82,7 @@ Client::Client(QObject* parent):
     , controlConnfd(-1)
     , dataConnfd(-1)
     , dataListenfd(-1)
-    , mode(0)
+    , mode(1)
     , bufp(0) {
 
     gettimeofday(&lastSendTime, nullptr);
@@ -211,7 +211,7 @@ void Client::refreshRemote(const char* path) {
     }
     else {
         memset(ipAddr, 0, 32);
-        strcpy(ipAddr, "127.0.0.1");
+        strcpy(ipAddr, "192.168.0.102");
         char param[MAXPARAM];
         if ((dataListenfd = setupListen(ipAddr, &port, 1)) != -1
             && request(this, "PORT", generatePortParam(param, ipAddr, port)) != -1
@@ -269,7 +269,7 @@ void Client::putFile(const char* src, const char* dst) {
     }
     else {
         memset(ipAddr, 0, 32);
-        strcpy(ipAddr, "127.0.0.1");
+        strcpy(ipAddr, "192.168.0.102");
         char param[MAXPARAM];
         if (request(this, "TYPE", "I") != -1
             && waitResCode(200, 5)
@@ -328,7 +328,7 @@ void Client::getFile(const char* src, const char* dst) {
     }
     else {
         memset(ipAddr, 0, 32);
-        strcpy(ipAddr, "127.0.0.1");
+        strcpy(ipAddr, "192.168.0.102");
         char param[MAXPARAM];
         if (request(this, "TYPE", "I") != -1
             && waitResCode(200, 5)
@@ -353,4 +353,23 @@ void Client::getFile(const char* src, const char* dst) {
     if (state != IDLE) setClientState(this, nState);
 }
 
+void Client::switchMode(int mode) {
+    this->mode = mode;
+}
 
+void Client::removeRemote(const char* path, int type) {
+    if (state != NORM) return;
+
+    setClientState(this, BUSY);
+    State nState = NORM;
+    if (type == 1) {
+        if (request(this, "RMD", path) != -1
+            && waitResCode(250, 5)) {
+
+            emit showMsg("Client: Remove directory success.", 1);
+        }
+        else emit showMsg("Client: Fail to remove directory.", 0);
+    }
+
+    if (state != IDLE) setClientState(this, nState);
+}

@@ -2,23 +2,27 @@
 
 #include <QMimeData>
 #include <QDebug>
+#include <QApplication>
+#include <QStyle>
+#include <QFileIconProvider>
 
 FileNode::FileNode(const QString& filename):
-    QStandardItem(filename) {
+    QStandardItem(filename) {}
 
-}
+FileNode::FileNode(const QIcon& icon, const QString& filename) :
+    QStandardItem(icon, filename) {}
 
 void FileNode::appendChildren(const QVector<QStringList>& fileList) {
     int len = fileList.length();
     if (len) clearChildren();
     for (int i = 0;i < len;i++) {
         FileNode* node = new FileNode(fileList[i][0]);
-
         appendRow(node);
         setChild(node->index().row(), 1, new FileNode(fileList[i][1]));
         setChild(node->index().row(), 2, new FileNode(fileList[i][2]));
         setChild(node->index().row(), 3, new FileNode(fileList[i][3]));
         setChild(node->index().row(), 4, new FileNode(fileList[i][4]));
+        node->setIcon(autoGetIcon(node->text(), node->getType()));
         if (fileList[i][3][0] == 'd') {
             appendFakeNode(node);
         }
@@ -31,9 +35,7 @@ FileNode::Type FileNode::getType() {
     QModelIndex index = model()->indexFromItem(this).siblingAtColumn(3);
     QString text = model()->itemFromIndex(index)->text();
     if (text[0] == 'd') return DIR;
-    else if (text.isEmpty()) {
-        return EMPTY;
-    }
+    else if (text.isEmpty()) return EMPTY;
     else return FILE;
 }
 
@@ -130,11 +132,33 @@ FileNode* FileNode::findNodeByPath(FileNode* root, const QString& path) {
     else return nullptr;
 }
 
-FileModel::FileModel(QObject* parent, const QString& rootPath):
+QIcon FileNode::autoGetIcon(const QString &filename, Type type) {
+    if (type == DIR) {
+        return iconProvider.icon(QFileIconProvider::Folder);
+    }
+    else {
+        QIcon icon;
+        QList<QMimeType> mime_types = mime_database.mimeTypesForFileName(filename);
+        qDebug() << mime_types.count();
+        for (int i=0; i < mime_types.count() && icon.isNull(); i++) {
+            icon = QIcon::fromTheme(mime_types[i].iconName());
+            // qDebug() << mime_types[i].iconName();
+            // qDebug() << icon;
+        }
+
+        if (icon.isNull()) {
+            return QApplication::style()->standardIcon(QStyle::SP_FileIcon);
+        }
+        else return icon;
+    }
+}
+
+FileModel::FileModel(const QString &_id, QObject* parent, const QString& rootPath):
     QStandardItemModel(parent)
-    , root(nullptr){
+    , id(_id)
+    , root(nullptr) {
     QStringList header;
-    header << "文件名" << "文件大小" << "最近修改" << "权限" << "所有者/组";
+    header << "Filename" << "Size" << "Last Modify" << "Authority" << "Owner/Group";
     setHorizontalHeaderLabels(header);
     initRoot(rootPath);
 }
@@ -157,8 +181,13 @@ FileNode* FileModel::getRoot() {
 
 Qt::ItemFlags FileModel::flags(const QModelIndex &index) const {
     Qt::ItemFlags flags = QAbstractItemModel::flags(index);
-    flags = flags | Qt::ItemIsDragEnabled | Qt::ItemIsDropEnabled;
-    return flags;
+    QStandardItem* item = itemFromIndex(index);
+    FileNode* node = dynamic_cast<FileNode*>(item);
+    if (index.column() != 0 || !node || !item->parent()) return flags;
+    else {
+        flags = flags | Qt::ItemIsDragEnabled | Qt::ItemIsDropEnabled | Qt::ItemIsEditable;
+        return flags;
+    }
 }
 
 QMimeData* FileModel::mimeData(const QModelIndexList &indexes) const {
@@ -170,6 +199,7 @@ QMimeData* FileModel::mimeData(const QModelIndexList &indexes) const {
 
     if (node->getType() == FileNode::FILE) {
         // 仅允许拖拽文件
+        data->setData("id", this->id.toLocal8Bit());
         data->setData("path", node->getPath().toLocal8Bit());
         data->setData("filename", node->text().toLocal8Bit());
     }
@@ -179,6 +209,8 @@ QMimeData* FileModel::mimeData(const QModelIndexList &indexes) const {
 }
 
 bool FileModel::dropMimeData(const QMimeData *data, Qt::DropAction action, int row, int column, const QModelIndex &parent) {
+    if (QString::fromLocal8Bit(data->data("id")) == this->id) return false;
+
     QModelIndex index = parent.siblingAtColumn(0);
     FileNode* node = dynamic_cast<FileNode*>(itemFromIndex(index));
     if (!node) return false;

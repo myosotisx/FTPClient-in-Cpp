@@ -47,6 +47,8 @@ public slots:
     void refreshRemote(const char* path);
     void putFile(const char* src, const char* dst);
     void getFile(const char* src, const char* dst);
+    void switchMode(int mode);
+    void removeRemote(const char* path, int type);
 
 private:
     State state;

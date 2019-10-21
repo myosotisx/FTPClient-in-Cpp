@@ -13,16 +13,20 @@ MainWindow::MainWindow(QWidget *parent)
     , state(Client::IDLE)
     , client(new Client)
     , controlThread(new QThread)
+    , remoteMenu(new QMenu(this))
     , port(21) {
     ui->setupUi(this);
+    setWindowTitle(tr("FTP Client"));
 
-    localFileModel = new FileModel(ui->localFileTree, "/Users/myosotis/Desktop");
+    initMenu();
+
+    localFileModel = new FileModel("local", ui->localFileTree, "/Users/myosotis/Documents/GitHub/FTPServer-in-C/FTPFile");
     ui->localFileTree->setModel(localFileModel);
     ui->localFileTree->setDragDropMode(QAbstractItemView::DragDrop);
     ui->localFileTree->header()->setMinimumSectionSize(200);
     ui->localFileTree->header()->setSectionResizeMode(0, QHeaderView::ResizeToContents);
 
-    remoteFileModel = new FileModel(ui->remoteFileTree, "/");
+    remoteFileModel = new FileModel("remote", ui->remoteFileTree, "/");
     ui->remoteFileTree->setModel(remoteFileModel);
     ui->remoteFileTree->setDragDropMode(QAbstractItemView::DragDrop);
     ui->remoteFileTree->header()->setMinimumSectionSize(200);
@@ -41,14 +45,21 @@ MainWindow::MainWindow(QWidget *parent)
     connect(this, &MainWindow::refreshRemote, client, &Client::refreshRemote, Qt::QueuedConnection);
     connect(this, &MainWindow::putFile, client, &Client::putFile, Qt::QueuedConnection);
     connect(this, &MainWindow::getFile, client, &Client::getFile, Qt::QueuedConnection);
+    connect(this, &MainWindow::switchMode, client, &Client::switchMode, Qt::QueuedConnection);
+    connect(this, &MainWindow::removeRemote, client, &Client::removeRemote, Qt::QueuedConnection);
 
     connect(ui->connBtn, &QPushButton::clicked, this, &MainWindow::connectNLogin);
     connect(ui->disconnBtn, &QPushButton::clicked, this, &MainWindow::disconnNLogout);
     connect(ui->localFileTree, &QTreeView::expanded, this, &MainWindow::refreshLocalDir);
     connect(ui->remoteFileTree, &QTreeView::expanded, this, &MainWindow::refreshRemoteDir);
+    connect(ui->PASVBtn, &QRadioButton::toggled, this, &MainWindow::switchPASV);
+    connect(ui->PORTBtn, &QRadioButton::toggled, this, &MainWindow::switchPORT);
+    connect(ui->remoteFileTree, &QWidget::customContextMenuRequested, this, &MainWindow::showMenu);
 
     connect(remoteFileModel, &FileModel::transfer, this, &MainWindow::uploadFile);
     connect(localFileModel, &FileModel::transfer, this, &MainWindow::downloadFile);
+
+    // connect(remoteFileModel, &FileModel::itemChanged, this, &MainWindow::test);
 
     QThread* controlThread = new QThread;
     client->moveToThread(controlThread);
@@ -57,6 +68,20 @@ MainWindow::MainWindow(QWidget *parent)
 
 MainWindow::~MainWindow() {
     delete ui;
+}
+
+void MainWindow::initMenu() {
+    QAction* acRename = new QAction("Rename", this);
+    connect(acRename, &QAction::triggered, this, &MainWindow::renameRemote);
+    remoteMenu->addAction(acRename);
+
+    QAction* acDelete = new QAction("Delete", this);
+    connect(acDelete, &QAction::triggered, this, &MainWindow::deleteRemote);
+    remoteMenu->addAction(acDelete);
+
+    QAction* acCreate = new QAction("Create Directory", this);
+    connect(acCreate, &QAction::triggered, this, &MainWindow::createRemote);
+    remoteMenu->addAction(acCreate);
 }
 
 void MainWindow::setState(int state) {
@@ -73,6 +98,20 @@ void MainWindow::showMsgbox(const QString& text) {
     QMessageBox msgbox(QMessageBox::Information, "Info", "");
     msgbox.setText(text);
     msgbox.exec();
+}
+
+void MainWindow::showMenu(const QPoint& pos) {
+    QModelIndex index = ui->remoteFileTree->indexAt(pos);
+    qDebug() << index;
+    if (index.isValid()) {
+        QStandardItem* item = remoteFileModel->itemFromIndex(index);
+        FileNode* node = dynamic_cast<FileNode*>(item);
+        if (node && item->parent() && node->getType() != FileNode::EMPTY) {
+            remoteMenu->exec(QCursor::pos());
+        }
+    }
+
+
 }
 
 void MainWindow::displayMsg(const char* msg, int type) {
@@ -145,6 +184,14 @@ void MainWindow::disconnNLogout() {
     else {
         emit logout();
     }
+}
+
+void MainWindow::switchPASV() {
+    emit switchMode(1);
+}
+
+void MainWindow::switchPORT() {
+    emit switchMode(0);
 }
 
 void MainWindow::refreshLocalDir(const QModelIndex& index) {
@@ -229,4 +276,22 @@ void MainWindow::downloadFile(const QString& srcPath, const QString& srcFile,
 void MainWindow::sendUserInfo() {
     if (state != Client::WAITUSER) return;
     emit login(username, password);
+}
+
+
+void MainWindow::createRemote() {
+
+}
+
+void MainWindow::renameRemote() {
+}
+
+void MainWindow::deleteRemote() {
+    QModelIndex index = ui->remoteFileTree->currentIndex();
+    FileNode* node = dynamic_cast<FileNode*>(remoteFileModel->itemFromIndex(index));
+    if (!node) return;
+    emit removeRemote(node->getPath().toLatin1().data(), 1); // 1为文件夹
+}
+
+void MainWindow::test(QStandardItem *item) {
 }

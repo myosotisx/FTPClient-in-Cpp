@@ -26,13 +26,18 @@ signals:
     void refreshRemote(const char* path);
     void putFile(const char* src, const char* dst);
     void getFile(const char* src, const char* dst);
+    void switchMode(int mode);
+    void removeRemote(const char* path, int type);
 
 public slots:
     void setState(int state);
     void initRemoteRoot(const char* rootPath);
     void showMsgbox(const QString& text);
+    void showMenu(const QPoint& pos);
     void connectNLogin();
     void disconnNLogout();
+    void switchPASV();
+    void switchPORT();
     void refreshLocalDir(const QModelIndex& index);
     void refreshRemoteDir(const QModelIndex& index);
     void displayMsg(const char* msg, int type = -1);
@@ -43,6 +48,11 @@ public slots:
     void downloadFile(const QString& srcPath, const QString& srcFile,
                       const QString& dstPath);
     void sendUserInfo();
+    void renameRemote();
+    void deleteRemote();
+    void createRemote();
+
+    void test(QStandardItem *item);
 
 private:
     Ui::MainWindow *ui;
@@ -51,6 +61,7 @@ private:
     FileModel* localFileModel;
     FileModel* remoteFileModel;
     QThread* controlThread;
+    QMenu* remoteMenu;
     char ipAddr[32];
     int port;
     char username[32];
@@ -60,5 +71,7 @@ private:
     char src[MAXPATH];
     char dst[MAXPATH];
     char localFileList[MAXBUF];
+
+    void initMenu();
 };
 #endif // MAINWINDOW_H
