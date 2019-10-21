@@ -12,13 +12,14 @@ class FileNode: public QObject, public QStandardItem {
     Q_OBJECT
 
 public:
-    enum Type { EMPTY, FILE, DIR };
+    enum Type { EMPTY = 0, FILE = 1, DIR  = 2};
     explicit FileNode(const QString& filename);
     explicit FileNode(const QIcon& icon, const QString& filename);
     void appendChildren(const QVector<QStringList>& fileList);
     void clearChildren();
     Type getType();
     QString getPath();
+    QString getParentPath();
     static QVector<QStringList> parseFileListStr(const QString& fileListStr);
     static void appendFakeNode(FileNode* node);
     static FileNode* findNodeByPath(FileNode* root, const QString& path);

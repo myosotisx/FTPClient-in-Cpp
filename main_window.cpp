@@ -56,6 +56,7 @@ MainWindow::MainWindow(QWidget *parent)
     connect(ui->PORTBtn, &QRadioButton::toggled, this, &MainWindow::switchPORT);
     connect(ui->remoteFileTree, &QWidget::customContextMenuRequested, this, &MainWindow::showMenu);
 
+
     connect(remoteFileModel, &FileModel::transfer, this, &MainWindow::uploadFile);
     connect(localFileModel, &FileModel::transfer, this, &MainWindow::downloadFile);
 
@@ -89,6 +90,22 @@ void MainWindow::setState(int state) {
     qDebug() << "Debug Info: state is set to " << this->state;
 }
 
+bool MainWindow::checkClientState() {
+    if (state == Client::BUSY) {
+        showMsgbox("Please wait for previous task complete.");
+        return false;
+    }
+    else if (state == Client::WAITUSER) {
+        showMsgbox("Please login before further operations.");
+        return false;
+    }
+    else if (state == Client::IDLE) {
+        showMsgbox("Please connect to FTP server first.");
+        return false;
+    }
+    else return true;
+}
+
 void MainWindow::initRemoteRoot(const char* rootPath) {
     QString _rootPath(rootPath);
     remoteFileModel->initRoot(rootPath);
@@ -102,7 +119,6 @@ void MainWindow::showMsgbox(const QString& text) {
 
 void MainWindow::showMenu(const QPoint& pos) {
     QModelIndex index = ui->remoteFileTree->indexAt(pos);
-    qDebug() << index;
     if (index.isValid()) {
         QStandardItem* item = remoteFileModel->itemFromIndex(index);
         FileNode* node = dynamic_cast<FileNode*>(item);
@@ -110,8 +126,6 @@ void MainWindow::showMenu(const QPoint& pos) {
             remoteMenu->exec(QCursor::pos());
         }
     }
-
-
 }
 
 void MainWindow::displayMsg(const char* msg, int type) {
@@ -209,10 +223,10 @@ void MainWindow::refreshLocalDir(const QModelIndex& index) {
 void MainWindow::refreshRemoteDir(const QModelIndex& index) {
     FileNode* node = dynamic_cast<FileNode*>(remoteFileModel->itemFromIndex(index));
     if (!node) return;
-    memset(remotePath, 0, MAXPATH);
-    strcpy(remotePath, node->getPath().toLatin1().data());
+    memset(remotePath[0], 0, MAXPATH);
+    strcpy(remotePath[0], node->getPath().toLatin1().data());
     if (state != Client::NORM) return;
-    emit refreshRemote(remotePath);
+    emit refreshRemote(remotePath[0]);
 }
 
 void MainWindow::displayLocal(const char* path, const char* localFileList) {
@@ -231,6 +245,7 @@ void MainWindow::displayRemote(const char* path, const char* remoteFileList) {
 
 void MainWindow::uploadFile(const QString& srcPath, const QString& srcFile,
                             const QString& dstPath) {
+    if (!checkClientState()) return;
     QString _srcPath;
     QString _dstPath;
     if (srcPath[srcPath.length()-1] == '/') {
@@ -253,6 +268,7 @@ void MainWindow::uploadFile(const QString& srcPath, const QString& srcFile,
 
 void MainWindow::downloadFile(const QString& srcPath, const QString& srcFile,
                               const QString& dstPath) {
+    if (!checkClientState()) return;
     QString _srcPath;
     QString _dstPath;
     if (srcPath[srcPath.length()-1] == '/') {
@@ -287,11 +303,17 @@ void MainWindow::renameRemote() {
 }
 
 void MainWindow::deleteRemote() {
+    if (!checkClientState()) return;
     QModelIndex index = ui->remoteFileTree->currentIndex();
     FileNode* node = dynamic_cast<FileNode*>(remoteFileModel->itemFromIndex(index));
     if (!node) return;
-    emit removeRemote(node->getPath().toLatin1().data(), 1); // 1为文件夹
+    memset(remotePath[0], 0, MAXPATH);
+    strcpy(remotePath[0], node->getPath().toLatin1().data());
+    memset(remotePath[1], 0, MAXPATH);
+    strcpy(remotePath[1], node->getParentPath().toLatin1().data());
+    emit removeRemote(remotePath[0], remotePath[1], node->getType()); // 2为文件夹
 }
 
 void MainWindow::test(QStandardItem *item) {
+
 }

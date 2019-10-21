@@ -62,6 +62,13 @@ QString FileNode::getPath() {
     return path;
 }
 
+QString FileNode::getParentPath() {
+    QStandardItem* _this = this;
+    FileNode* parent = dynamic_cast<FileNode*>(_this->parent());
+    if (parent) return parent->getPath();
+    else return this->getPath();
+}
+
 void FileNode::clearChildren() {
     removeRows(0, rowCount());
 }
@@ -183,7 +190,9 @@ Qt::ItemFlags FileModel::flags(const QModelIndex &index) const {
     Qt::ItemFlags flags = QAbstractItemModel::flags(index);
     QStandardItem* item = itemFromIndex(index);
     FileNode* node = dynamic_cast<FileNode*>(item);
-    if (index.column() != 0 || !node || !item->parent()) return flags;
+    if (index.column() != 0 || !node) {
+        return flags;
+    }
     else {
         flags = flags | Qt::ItemIsDragEnabled | Qt::ItemIsDropEnabled | Qt::ItemIsEditable;
         return flags;

@@ -48,7 +48,7 @@ public slots:
     void putFile(const char* src, const char* dst);
     void getFile(const char* src, const char* dst);
     void switchMode(int mode);
-    void removeRemote(const char* path, int type);
+    void removeRemote(const char* path, const char* parentPath, int type);
 
 private:
     State state;

@@ -211,7 +211,7 @@ void Client::refreshRemote(const char* path) {
     }
     else {
         memset(ipAddr, 0, 32);
-        strcpy(ipAddr, "192.168.0.102");
+        strcpy(ipAddr, "127.0.0.1");
         char param[MAXPARAM];
         if ((dataListenfd = setupListen(ipAddr, &port, 1)) != -1
             && request(this, "PORT", generatePortParam(param, ipAddr, port)) != -1
@@ -269,7 +269,7 @@ void Client::putFile(const char* src, const char* dst) {
     }
     else {
         memset(ipAddr, 0, 32);
-        strcpy(ipAddr, "192.168.0.102");
+        strcpy(ipAddr, "127.0.0.1");
         char param[MAXPARAM];
         if (request(this, "TYPE", "I") != -1
             && waitResCode(200, 5)
@@ -328,7 +328,7 @@ void Client::getFile(const char* src, const char* dst) {
     }
     else {
         memset(ipAddr, 0, 32);
-        strcpy(ipAddr, "192.168.0.102");
+        strcpy(ipAddr, "127.0.0.1");
         char param[MAXPARAM];
         if (request(this, "TYPE", "I") != -1
             && waitResCode(200, 5)
@@ -357,12 +357,19 @@ void Client::switchMode(int mode) {
     this->mode = mode;
 }
 
-void Client::removeRemote(const char* path, int type) {
+void Client::removeRemote(const char* path, const char* parentPath, int type) {
+    // 暂时不支持DELE指令
+    if (type != 2) {
+        emit showMsg("Client: DELE command is not support at present. But you can still delete a directory.", 2);
+        return;
+    }
+
+
     if (state != NORM) return;
 
     setClientState(this, BUSY);
     State nState = NORM;
-    if (type == 1) {
+    if (type == 2) {
         if (request(this, "RMD", path) != -1
             && waitResCode(250, 5)) {
 
@@ -371,5 +378,8 @@ void Client::removeRemote(const char* path, int type) {
         else emit showMsg("Client: Fail to remove directory.", 0);
     }
 
-    if (state != IDLE) setClientState(this, nState);
+    if (state != IDLE) {
+        setClientState(this, nState);
+        refreshRemote(parentPath);
+    }
 }

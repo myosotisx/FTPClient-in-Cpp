@@ -27,7 +27,7 @@ signals:
     void putFile(const char* src, const char* dst);
     void getFile(const char* src, const char* dst);
     void switchMode(int mode);
-    void removeRemote(const char* path, int type);
+    void removeRemote(const char* path, const char* parentPath, int type);
 
 public slots:
     void setState(int state);
@@ -67,11 +67,12 @@ private:
     char username[32];
     char password[32];
     char localPath[MAXPATH];
-    char remotePath[MAXPATH];
+    char remotePath[2][MAXPATH];
     char src[MAXPATH];
     char dst[MAXPATH];
     char localFileList[MAXBUF];
 
     void initMenu();
+    bool checkClientState();
 };
 #endif // MAINWINDOW_H
