@@ -5,6 +5,7 @@
 
 #include <QDebug>
 #include <QFileSystemModel>
+#include <QAbstractItemDelegate>
 #include <QMessageBox>
 
 MainWindow::MainWindow(QWidget *parent)
@@ -13,7 +14,9 @@ MainWindow::MainWindow(QWidget *parent)
     , state(Client::IDLE)
     , client(new Client)
     , controlThread(new QThread)
-    , remoteMenu(new QMenu(this))
+    , remoteFileMenu(new QMenu(this))
+    , remoteDirMenu(new QMenu(this))
+    , remoteRootMenu(new QMenu(this))
     , port(21) {
     ui->setupUi(this);
     setWindowTitle(tr("FTP Client"));
@@ -26,11 +29,13 @@ MainWindow::MainWindow(QWidget *parent)
     ui->localFileTree->header()->setMinimumSectionSize(200);
     ui->localFileTree->header()->setSectionResizeMode(0, QHeaderView::ResizeToContents);
 
-    remoteFileModel = new FileModel("remote", ui->remoteFileTree, "/");
+    remoteFileModel = new FileModel("remote", ui->remoteFileTree, "(root)");
     ui->remoteFileTree->setModel(remoteFileModel);
     ui->remoteFileTree->setDragDropMode(QAbstractItemView::DragDrop);
     ui->remoteFileTree->header()->setMinimumSectionSize(200);
     ui->remoteFileTree->header()->setSectionResizeMode(0, QHeaderView::ResizeToContents);
+
+    ui->remoteFileTree->setEnabled(false);
 
     connect(client, &Client::setState, this, &MainWindow::setState, Qt::QueuedConnection);
     connect(client, &Client::reqUserInfo, this, &MainWindow::sendUserInfo, Qt::QueuedConnection);
@@ -48,6 +53,8 @@ MainWindow::MainWindow(QWidget *parent)
     connect(this, &MainWindow::switchMode, client, &Client::switchMode, Qt::QueuedConnection);
     connect(this, &MainWindow::removeRemote, client, &Client::removeRemote, Qt::QueuedConnection);
     connect(this, &MainWindow::renameRemote, client, &Client::renameRemote, Qt::QueuedConnection);
+    connect(this, &MainWindow::makeDirRemote, client, &Client::makeDirRemote, Qt::QueuedConnection);
+    connect(this, &MainWindow::changeRemoteWorkDir, client, &Client::changeRemoteWorkDir, Qt::QueuedConnection);
 
     connect(ui->connBtn, &QPushButton::clicked, this, &MainWindow::connectNLogin);
     connect(ui->disconnBtn, &QPushButton::clicked, this, &MainWindow::disconnNLogout);
@@ -57,11 +64,10 @@ MainWindow::MainWindow(QWidget *parent)
     connect(ui->PORTBtn, &QRadioButton::toggled, this, &MainWindow::switchPORT);
     connect(ui->remoteFileTree, &QWidget::customContextMenuRequested, this, &MainWindow::showMenu);
 
-
     connect(remoteFileModel, &FileModel::transfer, this, &MainWindow::uploadFile);
     connect(localFileModel, &FileModel::transfer, this, &MainWindow::downloadFile);
     connect(remoteFileModel, &FileModel::textChanged, this, &MainWindow::changeNameRemote);
-    // connect(remoteFileModel, &FileModel::itemChanged, this, &MainWindow::test);
+    connect(remoteFileModel, &FileModel::rootChanged, this, &MainWindow::changeRemoteRoot);
 
     QThread* controlThread = new QThread;
     client->moveToThread(controlThread);
@@ -73,22 +79,36 @@ MainWindow::~MainWindow() {
 }
 
 void MainWindow::initMenu() {
+    // remoteFileMenu
     QAction* acRename = new QAction("Rename", this);
     connect(acRename, &QAction::triggered, this, &MainWindow::setEditState);
-    remoteMenu->addAction(acRename);
-
-    QAction* acDelete = new QAction("Delete", this);
-    connect(acDelete, &QAction::triggered, this, &MainWindow::deleteRemote);
-    remoteMenu->addAction(acDelete);
+    remoteFileMenu->addAction(acRename);
 
     QAction* acCreate = new QAction("Create Directory", this);
     connect(acCreate, &QAction::triggered, this, &MainWindow::createRemote);
-    remoteMenu->addAction(acCreate);
+    remoteFileMenu->addAction(acCreate);
+
+    // remoteDirMenu
+    remoteDirMenu->addAction(acRename);
+    remoteDirMenu->addAction(acCreate);
+
+    QAction* acDelete = new QAction("Delete", this);
+    connect(acDelete, &QAction::triggered, this, &MainWindow::deleteRemote);
+    remoteDirMenu->addAction(acDelete);
+
+    // remoteRootMenu
+    remoteRootMenu->addAction(acCreate);
+
+    QAction* acChangeWorkDir = new QAction("Change Work Directory", this);
+    // connect(acChangeWorkDir, &QAction::triggered, this, &MainWindow::changeRemoteDir);
+    remoteRootMenu->addAction(acChangeWorkDir);
 }
 
 void MainWindow::setState(int state) {
     this->state = Client::State(state);
     qDebug() << "Debug Info: state is set to " << this->state;
+    if (this->state == Client::IDLE) ui->remoteFileTree->setEnabled(false);
+    else if (this->state == Client::NORM){ ui->remoteFileTree->setEnabled(true); }
 }
 
 bool MainWindow::checkClientState() {
@@ -123,8 +143,14 @@ void MainWindow::showMenu(const QPoint& pos) {
     if (index.isValid()) {
         QStandardItem* item = remoteFileModel->itemFromIndex(index);
         FileNode* node = dynamic_cast<FileNode*>(item);
-        if (node && item->parent() && node->getType() != FileNode::EMPTY) {
-            remoteMenu->exec(QCursor::pos());
+        if (node && item->parent() && node->getType() == FileNode::FILE) {
+            remoteFileMenu->exec(QCursor::pos());
+        }
+        else if (node && item->parent() && node->getType() == FileNode::DIR) {
+            remoteDirMenu->exec(QCursor::pos());
+        }
+        else if (node && !item->parent()) {
+            remoteRootMenu->exec(QCursor::pos());
         }
     }
 }
@@ -296,11 +322,40 @@ void MainWindow::sendUserInfo() {
 }
 
 void MainWindow::setEditState() {
-
+    if (!checkClientState()) return;
+    QModelIndex index = ui->remoteFileTree->currentIndex();
+    ui->remoteFileTree->edit(index);
 }
 
 void MainWindow::createRemote() {
+    if (!checkClientState()) return;
+    QModelIndex index = ui->remoteFileTree->currentIndex();
+    FileNode* node = dynamic_cast<FileNode*>(remoteFileModel->itemFromIndex(index));
+    FileNode* dirNode = FileNode::findNodeByPath(remoteFileModel->getRoot(), node->getPath());
+    FileNode* childDirNode = dirNode->appendChildDir();
+    QModelIndex childDirIndex = remoteFileModel->indexFromItem(childDirNode);
+    if (!childDirIndex.isValid()) return;
+    disconnect(ui->remoteFileTree, &QTreeView::expanded, this, &MainWindow::refreshRemoteDir);
+    ui->remoteFileTree->setExpanded(remoteFileModel->indexFromItem(dirNode), true);
+    connect(ui->remoteFileTree, &QTreeView::expanded, this, &MainWindow::refreshRemoteDir);
+    ui->remoteFileTree->setCurrentIndex(childDirIndex);
+    connect(ui->remoteFileTree->itemDelegate(), &QAbstractItemDelegate::closeEditor
+            , this, &MainWindow::nameDirFinished);
+    ui->remoteFileTree->edit(childDirIndex);
+}
 
+void MainWindow::nameDirFinished() {
+    disconnect(ui->remoteFileTree->itemDelegate(), &QAbstractItemDelegate::closeEditor
+            , this, &MainWindow::nameDirFinished);
+    QModelIndex index = ui->remoteFileTree->currentIndex();
+    FileNode* node = dynamic_cast<FileNode*>(remoteFileModel->itemFromIndex(index));
+    if (!node) return;
+    memset(remotePath[0], 0, MAXPATH);
+    strcpy(remotePath[0], node->getPath().toLatin1().data());
+    qDebug() << remotePath[0];
+    memset(remotePath[1], 0, MAXPATH);
+    strcpy(remotePath[1], node->getParentPath().toLatin1().data());
+    emit makeDirRemote(remotePath[0], remotePath[1]);
 }
 
 void MainWindow::deleteRemote() {
@@ -310,21 +365,35 @@ void MainWindow::deleteRemote() {
     if (!node) return;
     memset(remotePath[0], 0, MAXPATH);
     strcpy(remotePath[0], node->getPath().toLatin1().data());
+    qDebug() << remotePath[0];
     memset(remotePath[1], 0, MAXPATH);
     strcpy(remotePath[1], node->getParentPath().toLatin1().data());
     emit removeRemote(remotePath[0], remotePath[1], node->getType()); // 2为文件夹
 }
 
-void MainWindow::changeNameRemote(const QModelIndex& index, const QString& oldName) {
+void MainWindow::changeNameRemote(const QModelIndex& index, const QString& oldPath) {
     if (!checkClientState()) return;
     FileNode* node = dynamic_cast<FileNode*>(remoteFileModel->itemFromIndex(index));
     if (!node) return;
     memset(remotePath[0], 0, MAXPATH);
-    strcpy(remotePath[0], oldName.toLatin1().data());
+    strcpy(remotePath[0], oldPath.toLatin1().data());
     memset(remotePath[1], 0, MAXPATH);
     strcpy(remotePath[1], node->getFilePath().toLatin1().data());
     memset(remotePath[2], 0, MAXPATH);
     strcpy(remotePath[2], node->getParentPath().toLatin1().data());
     emit renameRemote(remotePath[0], remotePath[1], remotePath[2]);
+}
 
+void MainWindow::changeRemoteRoot(const QString& oldRoot) {
+    if (!checkClientState()) {
+        remoteFileModel->getRoot()->setText(oldRoot);
+        return;
+    }
+    // return 后将root恢复
+    FileNode* root = remoteFileModel->getRoot();
+    memset(remotePath[0], 0, MAXPATH);
+    strcpy(remotePath[0], root->text().toLatin1().data());
+    memset(remotePath[1], 0, MAXPATH);
+    strcpy(remotePath[1], oldRoot.toLatin1().data());
+    emit changeRemoteWorkDir(remotePath[0], remotePath[1]);
 }

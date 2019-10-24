@@ -14,9 +14,10 @@ class FileNode: public QObject, public QStandardItem {
 public:
     enum { CompareRole = Qt::UserRole+1024 };
     enum Type { EMPTY = 0, FILE = 1, DIR  = 2};
-    explicit FileNode(const QString& filename);
-    explicit FileNode(const QIcon& icon, const QString& filename);
+    explicit FileNode(const QString& filename = "(empty)");
+    explicit FileNode(const QIcon& icon, const QString& filename = "(empty)");
     void appendChildren(const QVector<QStringList>& fileList);
+    FileNode* appendChildDir();
     void clearChildren();
     Type getType();
     QString getPath();
@@ -25,7 +26,7 @@ public:
     static QVector<QStringList> parseFileListStr(const QString& fileListStr);
     static void appendFakeNode(FileNode* node);
     static FileNode* findNodeByPath(FileNode* root, const QString& path);
-    static QIcon autoGetIcon(const QString& filename, Type type);
+    static QIcon autoGetIcon(Type type, const QString& filename = "(empty)");
 
 private:
 
@@ -51,7 +52,8 @@ public slots:
 signals:
     void transfer(const QString& srcPath, const QString& srcFile,
                   const QString& dstPath);
-    void textChanged(const QModelIndex& index, const QString& oldText);
+    void textChanged(const QModelIndex& index, const QString& oldPath);
+    void rootChanged(const QString& oldRoot);
 
 private:
 

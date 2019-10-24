@@ -42,6 +42,9 @@ void setClientState(Client* client, int state) {
         close(client->controlConnfd);
         client->controlConnfd = -1;
     }
+    else if (client->state == Client::BUSY) {
+        client->resCode = -1;
+    }
     emit client->setState(client->state);
 }
 
@@ -105,6 +108,10 @@ int Client::waitResCode(int resCode, double timeout) {
         if (this->resCode == resCode) {
             resCode = -1;
             return 1;
+        }
+        else if (this->resCode/100 == 4 || this->resCode/100 == 5) {
+            resCode = -1;
+            return 0;
         }
 
     }
@@ -211,7 +218,9 @@ void Client::refreshRemote(const char* path) {
     }
     else {
         memset(ipAddr, 0, 32);
-        strcpy(ipAddr, "127.0.0.1");
+        // strcpy(ipAddr, "127.0.0.1");
+        // strcpy(ipAddr, "183.172.171.52");
+        strcpy(ipAddr, "10.211.55.2");
         char param[MAXPARAM];
         if ((dataListenfd = setupListen(ipAddr, &port, 1)) != -1
             && request(this, "PORT", generatePortParam(param, ipAddr, port)) != -1
@@ -269,7 +278,9 @@ void Client::putFile(const char* src, const char* dst) {
     }
     else {
         memset(ipAddr, 0, 32);
-        strcpy(ipAddr, "127.0.0.1");
+        // strcpy(ipAddr, "127.0.0.1");
+        // strcpy(ipAddr, "183.172.171.52");
+        strcpy(ipAddr, "10.211.55.2");
         char param[MAXPARAM];
         if (request(this, "TYPE", "I") != -1
             && waitResCode(200, 5)
@@ -328,7 +339,9 @@ void Client::getFile(const char* src, const char* dst) {
     }
     else {
         memset(ipAddr, 0, 32);
-        strcpy(ipAddr, "127.0.0.1");
+        // strcpy(ipAddr, "127.0.0.1");
+        // strcpy(ipAddr, "183.172.171.52");
+        strcpy(ipAddr, "10.211.55.2");
         char param[MAXPARAM];
         if (request(this, "TYPE", "I") != -1
             && waitResCode(200, 5)
@@ -358,12 +371,12 @@ void Client::switchMode(int mode) {
 }
 
 void Client::removeRemote(const char* path, const char* parentPath, int type) {
+    qDebug() << path << parentPath;
     // 暂时不支持DELE指令
     if (type != 2) {
         emit showMsg("Client: DELE command is not support at present. But you can still delete a directory.", 2);
         return;
     }
-
 
     if (state != NORM) return;
 
@@ -384,7 +397,6 @@ void Client::removeRemote(const char* path, const char* parentPath, int type) {
 }
 
 void Client::renameRemote(const char* oldPath, const char* newPath, const char* parentPath) {
-    qDebug() << oldPath << newPath << parentPath;
     if (state != NORM) return;
 
     setClientState(this, BUSY);
@@ -402,4 +414,51 @@ void Client::renameRemote(const char* oldPath, const char* newPath, const char* 
         setClientState(this, nState);
         refreshRemote(parentPath);
     }
+}
+
+void Client::makeDirRemote(const char* path, const char* parentPath) {
+    if (state != NORM) return;
+
+    setClientState(this, BUSY);
+    State nState = NORM;
+    if (request(this, "MKD", path) != -1
+        && waitResCode(257, 5)) {
+
+        emit showMsg("Client: Create directory success.", 1);
+    }
+    else emit showMsg("Client: Fail to create directory.", 0);
+
+    if (state != IDLE) {
+        setClientState(this, nState);
+        refreshRemote(parentPath);
+    }
+}
+
+void Client::changeRemoteWorkDir(const char* path, const char* oldPath) {
+    if (state != NORM) return;
+
+    setClientState(this, BUSY);
+    State nState = NORM;
+    if (request(this, "CWD", path) != -1
+        && waitResCode(250, 5)
+        && request(this, "PWD", nullptr) != -1
+        && waitResCode(257, 5)) {
+
+        if (state != IDLE) {
+            setClientState(this, nState);
+        }
+        emit setRemoteRoot(rootPath);
+        refreshRemote(path);
+
+    }
+    else {
+        if (state != IDLE) {
+            setClientState(this, nState);
+        }
+        emit setRemoteRoot(oldPath);
+        // refreshRemote(oldPath);
+        emit showMsg("Client: Fail to change work directory.", 0);
+    }
+
+
 }

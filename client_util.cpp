@@ -330,6 +330,7 @@ char* generatePortParam(char* param, const char* ipAddr, int port) {
     p2 = port%256;
     strReplace(_ipAddr, '.', ',');
     sprintf(param, "%s,%d,%d", _ipAddr, p1, p2);
+    qDebug() << param;
     return param;
 }
 

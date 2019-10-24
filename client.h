@@ -50,6 +50,8 @@ public slots:
     void switchMode(int mode);
     void removeRemote(const char* path, const char* parentPath, int type);
     void renameRemote(const char* oldPath, const char* newPath, const char* parentPath);
+    void makeDirRemote(const char* path, const char* parentPath);
+    void changeRemoteWorkDir(const char* path, const char* oldPath);
 
 private:
     State state;

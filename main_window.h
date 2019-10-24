@@ -29,6 +29,8 @@ signals:
     void switchMode(int mode);
     void removeRemote(const char* path, const char* parentPath, int type);
     void renameRemote(const char* oldPath, const char* newPath, const char* parentPath);
+    void makeDirRemote(const char* path, const char* parentPath);
+    void changeRemoteWorkDir(const char* path, const char* oldPath);
 
 public slots:
     void setState(int state);
@@ -52,7 +54,9 @@ public slots:
     void setEditState();
     void deleteRemote();
     void createRemote();
-    void changeNameRemote(const QModelIndex& index, const QString& oldName);
+    void changeNameRemote(const QModelIndex& index, const QString& oldPath);
+    void nameDirFinished();
+    void changeRemoteRoot(const QString& oldRoot);
 
 private:
     Ui::MainWindow *ui;
@@ -61,7 +65,9 @@ private:
     FileModel* localFileModel;
     FileModel* remoteFileModel;
     QThread* controlThread;
-    QMenu* remoteMenu;
+    QMenu* remoteFileMenu;
+    QMenu* remoteDirMenu;
+    QMenu* remoteRootMenu;
     char ipAddr[32];
     int port;
     char username[32];

@@ -30,7 +30,7 @@ int request(Client* client, const char* cmd, const char* param) {
     while (1) {
         gettimeofday(&time, nullptr);
         double timeuse = (1000000*time.tv_sec+time.tv_usec)/1000.0-getLastSendTime(client);
-        if (timeuse > 500) break;
+        if (timeuse > 100) break;
     }
     int res = writeBuf(getControlConnfd(client), request, strlen(request));
     setLastSendTime(client, time.tv_sec, time.tv_usec);
