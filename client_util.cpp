@@ -345,13 +345,16 @@ int recvFileList(int dataConnfd, char* fileList) {
     }
 }
 
-int sendFile(int dataConnfd, FILE* file) {
+int sendFile(Client* client, int dataConnfd, FILE* file) {
     unsigned char fileBuf[MAXBUF];
     int readLen, writeLen = 0;
+    long long totLen = 0;
     while ((readLen = fread(fileBuf, sizeof(unsigned char), MAXBUF, file))) {
         if ((writeLen = writeBuf(dataConnfd, fileBuf, readLen)) == -1) {
             break;
         }
+        totLen += readLen;
+        updateProgress(client, totLen);
     }
     if (writeLen == -1) return -1;
     else return 1;

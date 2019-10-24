@@ -57,6 +57,9 @@ public slots:
     void changeNameRemote(const QModelIndex& index, const QString& oldPath);
     void nameDirFinished();
     void changeRemoteRoot(const QString& oldRoot);
+    void displayProgress();
+    void setPercent(long long progress);
+    void uploadFinished();
 
 private:
     Ui::MainWindow *ui;
@@ -64,10 +67,13 @@ private:
     Client* client;
     FileModel* localFileModel;
     FileModel* remoteFileModel;
+    FileListModel* transferListModel;
+    ProgressDelegate* progressDelegate;
     QThread* controlThread;
     QMenu* remoteFileMenu;
     QMenu* remoteDirMenu;
     QMenu* remoteRootMenu;
+    QTimer* timer;
     char ipAddr[32];
     int port;
     char username[32];
@@ -77,7 +83,8 @@ private:
     char src[MAXPATH];
     char dst[MAXPATH];
     char localFileList[MAXBUF];
-
+    long long transferSize;
+    double transferPercent;
     void initMenu();
     bool checkClientState();
 };

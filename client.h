@@ -30,6 +30,7 @@ public:
     friend void setRootPath(Client* client, const char* rootPath);
     friend void setLastSendTime(Client* client, long sec, long usec);
     friend double getLastSendTime(Client* client);
+    friend void updateProgress(Client* client, long long progress);
 
 signals:
     void setState(int);
@@ -38,6 +39,8 @@ signals:
     void showMsg(const char* msg, int type = -1);
     void showLocal(const char* path, const char* localFileList);
     void showRemote(const char* path, const char* remoteFileList);
+    void showProgress(long long progress);
+    void uploadFinished();
 
 public slots:
     void setupControlConn(const char* ipAddr, int port);

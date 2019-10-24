@@ -2,8 +2,10 @@
 #define FILEMODEL_H
 
 #include <QStandardItemModel>
+#include <QAbstractTableModel>
 #include <QMimeDatabase>
 #include <QFileIconProvider>
+#include <QStyledItemDelegate>
 
 static QMimeDatabase mime_database;
 static QFileIconProvider iconProvider;
@@ -20,6 +22,7 @@ public:
     FileNode* appendChildDir();
     void clearChildren();
     Type getType();
+    long long getSize();
     QString getPath();
     QString getFilePath();
     QString getParentPath();
@@ -59,6 +62,26 @@ private:
 
     QString id;
     FileNode* root;
+};
+
+class FileListModel: public QStandardItemModel {
+    Q_OBJECT
+public:
+    explicit FileListModel(QObject* parent = nullptr);
+    void appendFileItem(const QString& filename, const QString& type, double progress, long long size);
+    void updateProgress(int row, double percent);
+
+};
+
+class ProgressDelegate: public QStyledItemDelegate {
+    Q_OBJECT
+
+public:
+    explicit ProgressDelegate(QObject* parent = nullptr);
+    void paint(QPainter *painter,
+               const QStyleOptionViewItem &option,
+               const QModelIndex &index) const;
+
 };
 
 #endif // FILEMODEL_H

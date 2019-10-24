@@ -4,7 +4,10 @@
 #include <QDebug>
 #include <QApplication>
 #include <QStyle>
+#include <QPainter>
+#include <QProgressBar>
 #include <QFileIconProvider>
+#include <QStyleOptionProgressBar>
 
 FileNode::FileNode(const QString& filename):
     QStandardItem(filename) {}
@@ -48,6 +51,14 @@ FileNode::Type FileNode::getType() {
     if (text[0] == 'd') return DIR;
     else if (text.isEmpty()) return EMPTY;
     else return FILE;
+}
+
+long long FileNode::getSize() {
+    QModelIndex siblingIndex = index().siblingAtColumn(1);
+    if (siblingIndex.isValid()) {
+        return siblingIndex.data(Qt::EditRole).toLongLong();
+    }
+    else return -1;
 }
 
 QString FileNode::getPath() {
@@ -293,3 +304,43 @@ void FileModel::checkTextChanged(const QModelIndex& index) {
 }
 
 
+FileListModel::FileListModel(QObject* parent):
+     QStandardItemModel(parent) {
+    QStringList header;
+    header << "Filename" << "Download/Upload" << "Progress" << "Size";
+    setHorizontalHeaderLabels(header);
+}
+
+void FileListModel::appendFileItem(const QString& filename, const QString& type, double progress, long long size) {
+    QStringList fileInfo;
+    fileInfo << filename << type << QString::number(progress) << QString::number(size);
+    QStandardItem* node = new QStandardItem(FileNode::autoGetIcon(FileNode::FILE, filename), filename);
+    appendRow(node);
+    setItem(node->row(), 1, new QStandardItem(type));
+    setItem(node->row(), 2, new QStandardItem(QString::number(progress)));
+    setItem(node->row(), 3, new QStandardItem(QString::number(size)));
+}
+
+void FileListModel::updateProgress(int row, double percent) {
+    item(row, 2)->setText(QString::number(percent));
+}
+
+ProgressDelegate::ProgressDelegate(QObject* parent):
+    QStyledItemDelegate(parent) {}
+
+void ProgressDelegate::paint(QPainter *painter, const QStyleOptionViewItem &option, const QModelIndex &index) const {
+    if(index.column() == 2) {
+        double factor = index.model()->data(index, Qt::DisplayRole).toDouble();
+        qDebug() << factor;
+        painter->save();
+        painter->setBrush(QColor(0, int(factor*255), 255-int(factor*255))); // 否则颜色依次变淡
+        painter->setPen(Qt::white);
+        painter->drawRect(option.rect.x()+2, option.rect.y()+2
+                          , int(factor*(option.rect.width()-4))
+                          , option.rect.height()-4);
+        painter->restore();
+    }
+    else {
+        QStyledItemDelegate::paint(painter, option, index);
+    }
+}

@@ -35,6 +35,8 @@ void setLastSendTime(Client* client, long sec, long usec);
 
 double getLastSendTime(Client* client);
 
+void updateProgress(Client* client, long long progress);
+
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 
 int readBuf(int sockfd, void* buf);
@@ -69,7 +71,7 @@ char* listDir(char* fileList, const char* path, const char* param);
 
 int recvFileList(int dataConnfd, char* fileList);
 
-int sendFile(int dataConnfd, FILE* file);
+int sendFile(Client* client, int dataConnfd, FILE* file);
 
 int recvFile(int dataConnfd, FILE* file);
 

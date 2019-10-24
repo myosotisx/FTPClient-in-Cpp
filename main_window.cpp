@@ -4,6 +4,7 @@
 #include "client_pi.h"
 
 #include <QDebug>
+#include <QTimer>
 #include <QFileSystemModel>
 #include <QAbstractItemDelegate>
 #include <QMessageBox>
@@ -17,7 +18,9 @@ MainWindow::MainWindow(QWidget *parent)
     , remoteFileMenu(new QMenu(this))
     , remoteDirMenu(new QMenu(this))
     , remoteRootMenu(new QMenu(this))
-    , port(21) {
+    , timer(new QTimer)
+    , port(21)
+    , transferPercent(0.0) {
     ui->setupUi(this);
     setWindowTitle(tr("FTP Client"));
 
@@ -34,8 +37,13 @@ MainWindow::MainWindow(QWidget *parent)
     ui->remoteFileTree->setDragDropMode(QAbstractItemView::DragDrop);
     ui->remoteFileTree->header()->setMinimumSectionSize(200);
     ui->remoteFileTree->header()->setSectionResizeMode(0, QHeaderView::ResizeToContents);
-
     ui->remoteFileTree->setEnabled(false);
+
+    transferListModel = new FileListModel(ui->transferListView);
+    progressDelegate = new ProgressDelegate(ui->transferListView);
+    ui->transferListView->setModel(transferListModel);
+    ui->transferListView->setItemDelegateForColumn(2, progressDelegate);
+    ui->transferListView->header()->setMinimumSectionSize(200);
 
     connect(client, &Client::setState, this, &MainWindow::setState, Qt::QueuedConnection);
     connect(client, &Client::reqUserInfo, this, &MainWindow::sendUserInfo, Qt::QueuedConnection);
@@ -43,6 +51,8 @@ MainWindow::MainWindow(QWidget *parent)
     connect(client, &Client::showMsg, this, &MainWindow::displayMsg, Qt::QueuedConnection);
     connect(client, &Client::showLocal, this, &MainWindow::displayLocal, Qt::QueuedConnection);
     connect(client, &Client::showRemote, this, &MainWindow::displayRemote, Qt::QueuedConnection);
+    connect(client, &Client::showProgress, this, &MainWindow::setPercent, Qt::QueuedConnection);
+    connect(client, &Client::uploadFinished, this, &MainWindow::uploadFinished, Qt::QueuedConnection);
 
     connect(this, &MainWindow::setupControlConn, client, &Client::setupControlConn, Qt::QueuedConnection);
     connect(this, &MainWindow::login, client, &Client::login, Qt::QueuedConnection);
@@ -72,6 +82,8 @@ MainWindow::MainWindow(QWidget *parent)
     QThread* controlThread = new QThread;
     client->moveToThread(controlThread);
     controlThread->start();
+
+    timer->start(500);
 }
 
 MainWindow::~MainWindow() {
@@ -100,7 +112,7 @@ void MainWindow::initMenu() {
     remoteRootMenu->addAction(acCreate);
 
     QAction* acChangeWorkDir = new QAction("Change Work Directory", this);
-    // connect(acChangeWorkDir, &QAction::triggered, this, &MainWindow::changeRemoteDir);
+    connect(acChangeWorkDir, &QAction::triggered, this, &MainWindow::setEditState);
     remoteRootMenu->addAction(acChangeWorkDir);
 }
 
@@ -162,7 +174,7 @@ void MainWindow::displayMsg(const char* msg, int type) {
     else if (type == 2) msgInHTML = "<pre><font color=\"#FFBF00\">" + QString(msg).trimmed() + "</font></pre>";
     else if (type == 0) msgInHTML = "<pre><font color=\"#FF0000\">" + QString(msg).trimmed() + "</font></pre>";
     else msgInHTML = "<pre><font color=\"#000000\">" + QString(msg) + "</font></pre>";
-    ui->infoBroser->append(msgInHTML);
+    ui->infoBrowser->append(msgInHTML);
 }
 
 void MainWindow::connectNLogin() {
@@ -273,6 +285,7 @@ void MainWindow::displayRemote(const char* path, const char* remoteFileList) {
 void MainWindow::uploadFile(const QString& srcPath, const QString& srcFile,
                             const QString& dstPath) {
     if (!checkClientState()) return;
+
     QString _srcPath;
     QString _dstPath;
     if (srcPath[srcPath.length()-1] == '/') {
@@ -289,7 +302,12 @@ void MainWindow::uploadFile(const QString& srcPath, const QString& srcFile,
     memset(dst, 0, MAXPATH);
     strcpy(src, _srcPath.toLatin1().data());
     strcpy(dst, _dstPath.toLatin1().data());
-    if (state != Client::NORM) return;
+    // if (state != Client::NORM) return;
+    FileNode* node = FileNode::findNodeByPath(localFileModel->getRoot() , _srcPath);
+    if (node) transferSize = node->getSize();
+    else transferSize = -1;
+    transferListModel->appendFileItem(srcFile, "Upload", 0, transferSize);
+    connect(timer, &QTimer::timeout, this, &MainWindow::displayProgress);
     emit putFile(src, dst);
 }
 
@@ -396,4 +414,21 @@ void MainWindow::changeRemoteRoot(const QString& oldRoot) {
     memset(remotePath[1], 0, MAXPATH);
     strcpy(remotePath[1], oldRoot.toLatin1().data());
     emit changeRemoteWorkDir(remotePath[0], remotePath[1]);
+}
+
+void MainWindow::setPercent(long long progress) {
+    if (transferSize == -1) return;
+    transferPercent = progress/(1.0*transferSize);
+}
+
+void MainWindow::displayProgress() {
+    transferListModel->item(transferListModel->rowCount()-1, 2)
+            ->setText(QString::number(transferPercent));
+}
+
+void MainWindow::uploadFinished() {
+    transferListModel->item(transferListModel->rowCount()-1, 2)
+            ->setText(QString::number(1.0));
+    disconnect(timer, &QTimer::timeout, this, &MainWindow::displayProgress);
+    // transferListModel->removeRow(0);
 }

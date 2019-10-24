@@ -78,6 +78,10 @@ double getLastSendTime(Client* client) {
     return timeStamp;
 }
 
+void updateProgress(Client* client, long long progress) {
+    emit client->showProgress(progress);
+}
+
 Client::Client(QObject* parent):
     QObject(parent)
     , state(IDLE)
@@ -264,7 +268,7 @@ void Client::putFile(const char* src, const char* dst) {
             && (dataConnfd = setupConn(ipAddr, port, 1)) != -1
             && request(this, "STOR", dst) != -1
             && waitResCode(150, 5)
-            && sendFile(dataConnfd, file) != -1) {
+            && sendFile(this, dataConnfd, file) != -1) {
             close(dataConnfd);
             dataConnfd = -1;
             if (waitResCode(226, 5)) emit showMsg("Client: Upload file success.", 1);
@@ -290,7 +294,7 @@ void Client::putFile(const char* src, const char* dst) {
             && request(this, "STOR", dst) != -1
             && waitResCode(150, 5)
             && (dataConnfd = waitConn(dataListenfd, 5)) != -1
-            && sendFile(dataConnfd, file) != -1) {
+            && sendFile(this, dataConnfd, file) != -1) {
             close(dataConnfd);
             close(dataListenfd);
             dataConnfd = -1;
@@ -308,6 +312,7 @@ void Client::putFile(const char* src, const char* dst) {
         }
     }
     fclose(file);
+    emit uploadFinished();
     if (state != IDLE) setClientState(this, nState);
 }
 
