@@ -73,6 +73,6 @@ int recvFileList(int dataConnfd, char* fileList);
 
 int sendFile(Client* client, int dataConnfd, FILE* file);
 
-int recvFile(int dataConnfd, FILE* file);
+int recvFile(Client* client, int dataConnfd, FILE* file);
 
 #endif // CLIENT_UTIL_H

@@ -20,6 +20,8 @@ MainWindow::MainWindow(QWidget *parent)
     , remoteRootMenu(new QMenu(this))
     , timer(new QTimer)
     , port(21)
+    , currentSize(-1)
+    , lastStartPoint(0)
     , transferPercent(0.0) {
     ui->setupUi(this);
     setWindowTitle(tr("FTP Client"));
@@ -52,7 +54,8 @@ MainWindow::MainWindow(QWidget *parent)
     connect(client, &Client::showLocal, this, &MainWindow::displayLocal, Qt::QueuedConnection);
     connect(client, &Client::showRemote, this, &MainWindow::displayRemote, Qt::QueuedConnection);
     connect(client, &Client::showProgress, this, &MainWindow::setPercent, Qt::QueuedConnection);
-    connect(client, &Client::uploadFinished, this, &MainWindow::uploadFinished, Qt::QueuedConnection);
+    connect(client, &Client::transferFinished, this, &MainWindow::transferFinished, Qt::QueuedConnection);
+    connect(client, &Client::transferFail, this, &MainWindow::transferFail, Qt::QueuedConnection);
 
     connect(this, &MainWindow::setupControlConn, client, &Client::setupControlConn, Qt::QueuedConnection);
     connect(this, &MainWindow::login, client, &Client::login, Qt::QueuedConnection);
@@ -306,9 +309,25 @@ void MainWindow::uploadFile(const QString& srcPath, const QString& srcFile,
     FileNode* node = FileNode::findNodeByPath(localFileModel->getRoot() , _srcPath);
     if (node) transferSize = node->getSize();
     else transferSize = -1;
-    transferListModel->appendFileItem(srcFile, "Upload", 0, transferSize);
+    transferListModel->appendFileItem(srcFile, "Upload", 0.0, transferSize);
     connect(timer, &QTimer::timeout, this, &MainWindow::displayProgress);
-    emit putFile(src, dst);
+
+
+    FileNode* dstNode = FileNode::findNodeByPath(remoteFileModel->getRoot(), _dstPath);
+    if (dstNode && (currentSize = dstNode->getSize()) != -1) {
+        if (transferSize != -1) {
+            transferPercent = currentSize/(1.0*transferSize);
+            transferListModel->item(transferListModel->rowCount()-1, 2)->setText(QString::number(transferPercent));
+        }
+        else {
+            transferListModel->item(transferListModel->rowCount()-1, 2)->setText("Unknown");
+        }
+        emit putFile(src, dst, currentSize);
+    }
+    else {
+        currentSize = -1;
+        emit putFile(src, dst, 0);
+    }
 }
 
 void MainWindow::downloadFile(const QString& srcPath, const QString& srcFile,
@@ -330,8 +349,37 @@ void MainWindow::downloadFile(const QString& srcPath, const QString& srcFile,
     memset(dst, 0, MAXPATH);
     strcpy(src, _srcPath.toLatin1().data());
     strcpy(dst, _dstPath.toLatin1().data());
-    if (state != Client::NORM) return;
-    emit getFile(src, dst);
+    // if (state != Client::NORM) return;
+
+    FileNode* srcNode = FileNode::findNodeByPath(remoteFileModel->getRoot() , _srcPath);
+    if (srcNode) transferSize = srcNode->getSize();
+    else transferSize = -1;
+
+    transferListModel->appendFileItem(srcFile, "Download", 0.0, transferSize);
+    connect(timer, &QTimer::timeout, this, &MainWindow::displayProgress);
+
+    FileNode* dstNode = FileNode::findNodeByPath(localFileModel->getRoot(), _dstPath);
+    if (dstNode && (currentSize = dstNode->getSize()) != -1) {
+        lastStartPoint = currentSize;
+        if (transferSize != -1) {
+            transferPercent = currentSize/(1.0*transferSize);
+            transferListModel->item(transferListModel->rowCount()-1, 2)->setText(QString::number(transferPercent));
+        }
+        else {
+            transferListModel->item(transferListModel->rowCount()-1, 2)->setText("Unknown");
+        }
+        emit getFile(src, dst, currentSize);
+    }
+    else if (lastStartPoint) {
+        lastStartPoint = 0;
+        currentSize = -1;
+        emit getFile(src, dst, 0);
+    }
+    else {
+        currentSize = -1;
+        emit getFile(src, dst, -1);
+    }
+
 }
 
 void MainWindow::sendUserInfo() {
@@ -418,17 +466,34 @@ void MainWindow::changeRemoteRoot(const QString& oldRoot) {
 
 void MainWindow::setPercent(long long progress) {
     if (transferSize == -1) return;
-    transferPercent = progress/(1.0*transferSize);
+    if (currentSize == -1) transferPercent = progress/(1.0*transferSize);
+    else transferPercent = (progress+currentSize)/(1.0*transferSize);
 }
 
 void MainWindow::displayProgress() {
-    transferListModel->item(transferListModel->rowCount()-1, 2)
-            ->setText(QString::number(transferPercent));
+    if (transferSize != -1) {
+        transferListModel->item(transferListModel->rowCount()-1, 2)
+                ->setText(QString::number(transferPercent));
+    }
+    else {
+        transferListModel->item(transferListModel->rowCount()-1, 2)
+                ->setText("Unknown");
+    }
+
 }
 
-void MainWindow::uploadFinished() {
+void MainWindow::transferFinished() {
     transferListModel->item(transferListModel->rowCount()-1, 2)
-            ->setText(QString::number(1.0));
+            ->setText("Transfer Finished");
     disconnect(timer, &QTimer::timeout, this, &MainWindow::displayProgress);
-    // transferListModel->removeRow(0);
+    transferSize = -1;
+    transferPercent = 0.0;
+}
+
+void MainWindow::transferFail() {
+    transferListModel->item(transferListModel->rowCount()-1, 2)
+            ->setText("Transfer Failed");
+    disconnect(timer, &QTimer::timeout, this, &MainWindow::displayProgress);
+    transferSize = -1;
+    transferPercent = 0.0;
 }

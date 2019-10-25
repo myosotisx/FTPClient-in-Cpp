@@ -40,7 +40,8 @@ signals:
     void showLocal(const char* path, const char* localFileList);
     void showRemote(const char* path, const char* remoteFileList);
     void showProgress(long long progress);
-    void uploadFinished();
+    void transferFinished();
+    void transferFail();
 
 public slots:
     void setupControlConn(const char* ipAddr, int port);
@@ -48,8 +49,8 @@ public slots:
     void logout();
     void refreshLocal(const char* path);
     void refreshRemote(const char* path);
-    void putFile(const char* src, const char* dst);
-    void getFile(const char* src, const char* dst);
+    void putFile(const char* src, const char* dst, long long currentSize);
+    void getFile(const char* src, const char* dst, long long currentSize);
     void switchMode(int mode);
     void removeRemote(const char* path, const char* parentPath, int type);
     void renameRemote(const char* oldPath, const char* newPath, const char* parentPath);

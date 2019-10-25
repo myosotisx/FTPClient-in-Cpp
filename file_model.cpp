@@ -330,7 +330,12 @@ ProgressDelegate::ProgressDelegate(QObject* parent):
 
 void ProgressDelegate::paint(QPainter *painter, const QStyleOptionViewItem &option, const QModelIndex &index) const {
     if(index.column() == 2) {
-        double factor = index.model()->data(index, Qt::DisplayRole).toDouble();
+        bool ok = false;
+        double factor = index.model()->data(index, Qt::DisplayRole).toDouble(&ok);
+        if (!ok) {
+            QStyledItemDelegate::paint(painter, option, index);
+            return;
+        }
         qDebug() << factor;
         painter->save();
         painter->setBrush(QColor(0, int(factor*255), 255-int(factor*255))); // 否则颜色依次变淡

@@ -24,8 +24,8 @@ signals:
     void logout();
     // void refreshLocal(const char* path);
     void refreshRemote(const char* path);
-    void putFile(const char* src, const char* dst);
-    void getFile(const char* src, const char* dst);
+    void putFile(const char* src, const char* dst, long long currentSize);
+    void getFile(const char* src, const char* dst, long long currentSize);
     void switchMode(int mode);
     void removeRemote(const char* path, const char* parentPath, int type);
     void renameRemote(const char* oldPath, const char* newPath, const char* parentPath);
@@ -59,7 +59,8 @@ public slots:
     void changeRemoteRoot(const QString& oldRoot);
     void displayProgress();
     void setPercent(long long progress);
-    void uploadFinished();
+    void transferFinished();
+    void transferFail();
 
 private:
     Ui::MainWindow *ui;
@@ -84,6 +85,8 @@ private:
     char dst[MAXPATH];
     char localFileList[MAXBUF];
     long long transferSize;
+    long long currentSize;
+    long long lastStartPoint;
     double transferPercent;
     void initMenu();
     bool checkClientState();

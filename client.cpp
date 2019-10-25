@@ -3,6 +3,7 @@
 #include <sys/time.h>
 #include <unistd.h>
 #include <pthread.h>
+#include <stdlib.h>
 
 #include <QDebug>
 
@@ -249,7 +250,7 @@ void Client::refreshRemote(const char* path) {
     if (state != IDLE) setClientState(this, nState);
 }
 
-void Client::putFile(const char* src, const char* dst) {
+void Client::putFile(const char* src, const char* dst, long long currentSize) {
     if (state != NORM) return;
 
     setClientState(this, BUSY);
@@ -260,24 +261,28 @@ void Client::putFile(const char* src, const char* dst) {
         if (state != IDLE) setClientState(this, nState);
         return;
     }
+    fseek(file, currentSize, 0);
     if (mode) {
         if (request(this, "TYPE", "I") != -1
             && waitResCode(200, 5)
             && request(this, "PASV", nullptr) != -1
             && waitResCode(227, 5)
             && (dataConnfd = setupConn(ipAddr, port, 1)) != -1
-            && request(this, "STOR", dst) != -1
+            // && request(this, "STOR", dst) != -1
+            && ((currentSize == 0 && request(this, "STOR", dst) != -1) || (currentSize > 0 && request(this, "APPE", dst) != -1))
             && waitResCode(150, 5)
             && sendFile(this, dataConnfd, file) != -1) {
             close(dataConnfd);
             dataConnfd = -1;
             if (waitResCode(226, 5)) emit showMsg("Client: Upload file success.", 1);
             else emit showMsg("Client: Upload finished without response from server.", 2);
+            emit transferFinished();
         }
         else {
             close(dataConnfd);
             dataConnfd = -1;
             emit showMsg("Client: Fail to upload file.", 0);
+            emit transferFail();
         }
     }
     else {
@@ -302,6 +307,7 @@ void Client::putFile(const char* src, const char* dst) {
 
             if (waitResCode(226, 5)) emit showMsg("Client: Upload file success.", 1);
             else emit showMsg("Client: Upload finished without response from server.", 2);
+            emit transferFinished();
         }
         else {
             close(dataConnfd);
@@ -309,38 +315,50 @@ void Client::putFile(const char* src, const char* dst) {
             dataConnfd = -1;
             dataListenfd = -1;
             emit showMsg("Client: Fail to upload file.", 0);
+            emit transferFail();
         }
     }
     fclose(file);
-    emit uploadFinished();
     if (state != IDLE) setClientState(this, nState);
 }
 
-void Client::getFile(const char* src, const char* dst) {
+void Client::getFile(const char* src, const char* dst, long long currentSize) {
     if (state != NORM) return;
 
     setClientState(this, BUSY);
     State nState = NORM;
-    FILE* file = fopen(dst, "wb");
+    FILE* file;
+    if (currentSize != -1 && currentSize != 0) {
+        file = fopen(dst, "ab");
+    }
+    else file = fopen(dst, "wb");
     if (!file) {
         emit showMsg("Client: Fail to open local file.", 0);
         if (state != IDLE) setClientState(this, nState);
         return;
     }
+    char llBuf[64];
+    memset(llBuf, 0, 64);
+    sprintf(llBuf, "%lld", currentSize);
     if (mode) {
         if (request(this, "TYPE", "I") != -1
             && waitResCode(200, 5)
             && request(this, "PASV", nullptr) != -1
             && waitResCode(227, 5)
+            && (currentSize == -1 || (request(this, "REST", llBuf) != -1 && waitResCode(350, 5)))
             && (dataConnfd = setupConn(ipAddr, port, 1)) != -1
             && request(this, "RETR", src) != -1
             && waitResCode(150, 5)
-            && recvFile(dataConnfd, file) != -1) {
+            && recvFile(this, dataConnfd, file) != -1) {
 
             if (waitResCode(226, 5)) emit showMsg("Client: Download file success.", 1);
             else emit showMsg("Client: Download finished without response from server.", 2);
+            emit transferFinished();
         }
-        else emit showMsg("Client: Fail to upload file.", 0);
+        else {
+            emit showMsg("Client: Fail to download file.", 0);
+            emit transferFail();
+        }
     }
     else {
         memset(ipAddr, 0, 32);
@@ -353,15 +371,20 @@ void Client::getFile(const char* src, const char* dst) {
             && (dataListenfd = setupListen(ipAddr, &port, 1)) != -1
             && request(this, "PORT", generatePortParam(param, ipAddr, port)) != -1
             && waitResCode(200, 5)
+            && (currentSize == -1 || (request(this, "REST", llBuf) != -1 && waitResCode(350, 5)))
             && request(this, "RETR", src) != -1
             && waitResCode(150, 5)
             && (dataConnfd = waitConn(dataListenfd, 5)) != -1
-            && recvFile(dataConnfd, file) != -1) {
+            && recvFile(this, dataConnfd, file) != -1) {
 
             if (waitResCode(226, 5)) emit showMsg("Client: Download file success.", 1);
             else emit showMsg("Client: Download finished without response from server.", 2);
+            emit transferFinished();
         }
-        else emit showMsg("Client: Fail to upload file.", 0);
+        else {
+            emit showMsg("Client: Fail to download file.", 0);
+            emit transferFail();
+        }
     }
     close(dataConnfd);
     close(dataListenfd);

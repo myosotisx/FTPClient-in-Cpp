@@ -360,12 +360,15 @@ int sendFile(Client* client, int dataConnfd, FILE* file) {
     else return 1;
 }
 
-int recvFile(int dataConnfd, FILE* file) {
+int recvFile(Client* client, int dataConnfd, FILE* file) {
     unsigned char fileBuf[MAXBUF];
     int readLen;
+    long long totLen = 0;
     while ((readLen = read(dataConnfd, fileBuf, MAXBUF))) {
         if (readLen == -1) break;
         fwrite(fileBuf, sizeof(unsigned char), readLen, file);
+        totLen += readLen;
+        updateProgress(client, totLen);
     }
     if (readLen == -1) return -1;
     else return 1;
